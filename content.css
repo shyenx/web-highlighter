@@ -1,0 +1,93 @@
+.wh-mark { border-radius: 2px; padding: 0 1px; cursor: pointer; transition: filter .15s; }
+.wh-mark:hover { filter: brightness(0.92); }
+
+#wh-toolbar {
+  position: fixed; right: 16px; bottom: 16px; z-index: 2147483647;
+  background: #fff; border: 1px solid #ddd; border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12); padding: 8px;
+  display: flex; gap: 6px; align-items: center;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 12px;
+}
+#wh-toolbar .wh-swatch {
+  width: 20px; height: 20px; border-radius: 50%; cursor: pointer;
+  border: 2px solid transparent; box-sizing: border-box;
+}
+#wh-toolbar .wh-swatch.active { border-color: #333; }
+#wh-toolbar button {
+  border: none; background: #f3f3f3; border-radius: 6px;
+  padding: 4px 8px; cursor: pointer; font-size: 12px;
+}
+#wh-toolbar button:hover { background: #e7e7e7; }
+#wh-drag {
+  cursor: grab; user-select: none; color: #999;
+  padding: 0 4px; font-size: 14px; line-height: 1;
+}
+#wh-drag:active { cursor: grabbing; }
+
+#wh-popup {
+  position: absolute; z-index: 2147483647; background: #222; color: #fff;
+  border-radius: 6px; padding: 4px; display: none; gap: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.3);
+}
+#wh-popup .wh-swatch {
+  width: 18px; height: 18px; border-radius: 50%; cursor: pointer;
+  border: 2px solid transparent; box-sizing: border-box;
+}
+#wh-popup .wh-swatch.active { border-color: #fff; }
+#wh-popup button {
+  border: none; background: #444; color: #fff; border-radius: 4px;
+  padding: 2px 6px; cursor: pointer; font-size: 11px;
+}
+#wh-popup button:hover { background: #666; }
+#wh-popup .wh-note-row {
+  display: flex; gap: 4px; width: 240px; margin-top: 4px;
+}
+#wh-popup textarea {
+  flex: 1; min-height: 48px; resize: vertical; border-radius: 4px;
+  border: 1px solid #555; background: #333; color: #fff; padding: 4px;
+  font-size: 12px; font-family: inherit;
+}
+.wh-mark[data-wh-note="1"] {
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,.35);
+}
+
+/* Sidebar */
+#wh-sidebar {
+  position: fixed; top: 0; right: 0; width: 320px; height: 100vh;
+  background: #fff; border-left: 1px solid #ddd; z-index: 2147483646;
+  box-shadow: -4px 0 16px rgba(0,0,0,.08);
+  display: none; flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 13px; color: #222;
+}
+#wh-sidebar.open { display: flex; }
+#wh-sidebar-header {
+  padding: 12px; border-bottom: 1px solid #eee;
+  display: flex; justify-content: space-between; align-items: center;
+  font-weight: 600;
+}
+#wh-sidebar-header button {
+  border: none; background: transparent; cursor: pointer; font-size: 16px;
+}
+#wh-sidebar-list { flex: 1; overflow-y: auto; padding: 8px; }
+.wh-item {
+  padding: 8px; border-radius: 6px; margin-bottom: 6px;
+  cursor: pointer; border-left: 4px solid transparent;
+  background: #fafafa;
+}
+.wh-item:hover { background: #f0f0f0; }
+.wh-item-text {
+  font-size: 12px; color: #333; line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.wh-item-note {
+  margin-top: 4px; padding: 4px 6px; background: #fff; border-radius: 4px;
+  border: 1px solid #eee; font-size: 11px; color: #666; white-space: pre-wrap;
+}
+.wh-flash { animation: wh-flash 1.2s ease; }
+@keyframes wh-flash {
+  0%   { box-shadow: 0 0 0 4px rgba(255,193,7,.7); }
+  100% { box-shadow: 0 0 0 0 rgba(255,193,7,0); }
+}
