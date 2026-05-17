@@ -14,7 +14,11 @@
 
 ### 截图
 
-| 工具栏 | 多色高亮 |
+**v0.2.0 工具栏（含 4 种标注样式）**
+
+![Toolbar v0.2.0](img/screenshot-20260517-144328-v2.png)
+
+| 工具栏 (v0.1) | 多色高亮 |
 |---|---|
 | ![Toolbar](img/screenshot-20260515-132726.png) | ![Highlights](img/screenshot-20260515-132850.png) |
 
