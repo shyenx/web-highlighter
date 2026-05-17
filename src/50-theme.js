@@ -32,7 +32,7 @@
   };
 
   wh.applyTheme = function applyTheme(theme) {
-    [wh.toolbar, wh.popup, wh.sidebar].forEach(el => {
+    [wh.toolbar, wh.popup, wh.sidebar, wh.colorPop, wh.stylePop].forEach(el => {
       if (el) el.dataset.whTheme = theme;
     });
   };

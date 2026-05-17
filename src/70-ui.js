@@ -13,9 +13,14 @@
     wh.toolbar.id = 'wh-toolbar';
     wh.toolbar.innerHTML = `
       <div id="wh-drag" title="${t('drag')}">⋮⋮</div>
-      ${COLORS.map(c => `<div class="wh-swatch" data-color="${c}" style="background:${c}"></div>`).join('')}
-      <div class="wh-sep"></div>
-      ${STYLES.map(s => `<button class="wh-style" data-style="${s.key}" title="${t('style_' + s.key)}"><span style="${s.preview(cache.lastColor)}">${s.label}</span></button>`).join('')}
+      <button id="wh-color-picker" class="wh-picker" title="${t('style_bg')}">
+        <span id="wh-color-dot" class="wh-color-dot" style="background:${cache.lastColor}"></span>
+        <span class="wh-caret">▾</span>
+      </button>
+      <button id="wh-style-picker" class="wh-picker" title="${t('style_' + cache.lastStyle)}">
+        <span id="wh-style-glyph"><span>A</span></span>
+        <span class="wh-caret">▾</span>
+      </button>
       <div class="wh-sep"></div>
       <button id="wh-toggle"></button>
       <button id="wh-undo" title="${t('undo')}">↶</button>
@@ -62,6 +67,24 @@
     `;
     document.body.appendChild(wh.popup);
 
+    // Color picker popover
+    wh.colorPop = document.createElement('div');
+    wh.colorPop.id = 'wh-color-pop';
+    wh.colorPop.className = 'wh-pop';
+    wh.colorPop.innerHTML = COLORS.map(c =>
+      `<div class="wh-swatch" data-color="${c}" style="background:${c}"></div>`
+    ).join('');
+    document.body.appendChild(wh.colorPop);
+
+    // Style picker popover
+    wh.stylePop = document.createElement('div');
+    wh.stylePop.id = 'wh-style-pop';
+    wh.stylePop.className = 'wh-pop';
+    wh.stylePop.innerHTML = STYLES.map(s =>
+      `<button class="wh-style" data-style="${s.key}" title="${t('style_' + s.key)}"><span style="${s.preview(cache.lastColor)}">${s.label}</span></button>`
+    ).join('');
+    document.body.appendChild(wh.stylePop);
+
     wh.sidebar = document.createElement('div');
     wh.sidebar.id = 'wh-sidebar';
     wh.sidebar.innerHTML = `
@@ -82,18 +105,37 @@
   };
 
   wh.refreshToolbar = function refreshToolbar() {
-    const { t, STYLES, cache, toolbar } = wh;
+    const { t, STYLES, cache, toolbar, colorPop, stylePop } = wh;
     if (!toolbar) return;
-    toolbar.querySelectorAll('.wh-swatch').forEach(s => {
-      s.classList.toggle('active', s.dataset.color === cache.lastColor);
-    });
-    // Style buttons: mark active + re-sync their preview color to the current default.
-    toolbar.querySelectorAll('.wh-style').forEach(b => {
-      b.classList.toggle('active', b.dataset.style === cache.lastStyle);
-      const s = STYLES.find(x => x.key === b.dataset.style);
-      const span = b.querySelector('span');
-      if (span && s) span.setAttribute('style', s.preview(cache.lastColor));
-    });
+
+    // Toolbar picker buttons reflect current selection.
+    const dot = toolbar.querySelector('#wh-color-dot');
+    if (dot) dot.style.background = cache.lastColor;
+    const styleGlyph = toolbar.querySelector('#wh-style-glyph');
+    const currentStyle = STYLES.find(s => s.key === cache.lastStyle);
+    if (styleGlyph && currentStyle) {
+      styleGlyph.innerHTML = `<span style="${currentStyle.preview(cache.lastColor)}">A</span>`;
+    }
+    const colorBtn = toolbar.querySelector('#wh-color-picker');
+    if (colorBtn) colorBtn.title = t('style_bg'); // 一律展示 "颜色" 含义
+    const styleBtn = toolbar.querySelector('#wh-style-picker');
+    if (styleBtn) styleBtn.title = t('style_' + cache.lastStyle);
+
+    // Sync popover internal active states + style previews.
+    if (colorPop) {
+      colorPop.querySelectorAll('.wh-swatch').forEach(s => {
+        s.classList.toggle('active', s.dataset.color === cache.lastColor);
+      });
+    }
+    if (stylePop) {
+      stylePop.querySelectorAll('.wh-style').forEach(b => {
+        b.classList.toggle('active', b.dataset.style === cache.lastStyle);
+        const s = STYLES.find(x => x.key === b.dataset.style);
+        const span = b.querySelector('span');
+        if (span && s) span.setAttribute('style', s.preview(cache.lastColor));
+      });
+    }
+
     const btn = toolbar.querySelector('#wh-toggle');
     btn.textContent = cache.enabled ? t('enabled') : t('disabled');
     btn.style.background = cache.enabled ? '#d4edda' : '#f8d7da';
@@ -112,9 +154,16 @@
       toolbar.querySelector('#wh-lang').textContent = t('langToggle');
       toolbar.querySelector('#wh-lang').title = t('langSwitchTitle');
       toolbar.querySelector('#wh-hide').title = t('hide');
-      toolbar.querySelectorAll('.wh-style').forEach(b => {
-        b.title = t('style_' + b.dataset.style);
-      });
+      // Picker buttons + style popover button titles.
+      const colorBtn = toolbar.querySelector('#wh-color-picker');
+      if (colorBtn) colorBtn.title = t('style_bg');
+      const styleBtn = toolbar.querySelector('#wh-style-picker');
+      if (styleBtn) styleBtn.title = t('style_' + cache.lastStyle);
+      if (wh.stylePop) {
+        wh.stylePop.querySelectorAll('.wh-style').forEach(b => {
+          b.title = t('style_' + b.dataset.style);
+        });
+      }
       wh.refreshToolbar();
     }
     if (popup) {
@@ -137,25 +186,46 @@
     }
   };
 
+  function positionPopAbove(pop, anchorBtn) {
+    const r = anchorBtn.getBoundingClientRect();
+    pop.style.display = 'flex';
+    // Render once to measure, then position centered above the button.
+    const popH = pop.offsetHeight || 36;
+    const popW = pop.offsetWidth  || 200;
+    const top  = window.scrollY + r.top - popH - 6;
+    let left = window.scrollX + r.left + r.width / 2 - popW / 2;
+    // Keep within viewport horizontally.
+    left = Math.max(window.scrollX + 4, Math.min(window.scrollX + window.innerWidth - popW - 4, left));
+    pop.style.top  = top  + 'px';
+    pop.style.left = left + 'px';
+  }
+
+  function closeAllPickerPops() {
+    if (wh.colorPop) wh.colorPop.style.display = 'none';
+    if (wh.stylePop) wh.stylePop.style.display = 'none';
+  }
+
   function setupToolbarHandlers() {
     wh.toolbar.addEventListener('mousedown', e => {
       if (e.target.id === 'wh-drag') return; // 拖动单独处理
       e.stopPropagation();
       e.preventDefault();
-      const sw = e.target.closest('.wh-swatch');
-      if (sw) {
-        wh.cache.lastColor = sw.dataset.color;
-        wh.refreshToolbar();
-        setTimeout(wh.saveLastColor, 0);
+
+      // Picker buttons open / close popovers.
+      const pickerBtn = e.target.closest('#wh-color-picker, #wh-style-picker');
+      if (pickerBtn) {
+        const isColor = pickerBtn.id === 'wh-color-picker';
+        const pop = isColor ? wh.colorPop : wh.stylePop;
+        const other = isColor ? wh.stylePop : wh.colorPop;
+        if (other) other.style.display = 'none';
+        if (pop.style.display === 'flex') {
+          pop.style.display = 'none';
+        } else {
+          positionPopAbove(pop, pickerBtn);
+        }
         return;
       }
-      const st = e.target.closest('.wh-style');
-      if (st) {
-        wh.cache.lastStyle = st.dataset.style;
-        wh.refreshToolbar();
-        setTimeout(wh.saveLastStyle, 0);
-        return;
-      }
+
       if (e.target.id === 'wh-toggle') {
         wh.cache.enabled = !wh.cache.enabled;
         wh.refreshToolbar();
@@ -188,6 +258,41 @@
         wh.toolbar.style.display = 'none';
       }
     });
+
+    // Color picker popover: pick a swatch.
+    wh.colorPop.addEventListener('mousedown', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      const sw = e.target.closest('.wh-swatch');
+      if (!sw) return;
+      wh.cache.lastColor = sw.dataset.color;
+      wh.refreshToolbar();
+      setTimeout(wh.saveLastColor, 0);
+      closeAllPickerPops();
+    });
+
+    // Style picker popover: pick a style.
+    wh.stylePop.addEventListener('mousedown', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      const st = e.target.closest('.wh-style');
+      if (!st) return;
+      wh.cache.lastStyle = st.dataset.style;
+      wh.refreshToolbar();
+      setTimeout(wh.saveLastStyle, 0);
+      closeAllPickerPops();
+    });
+
+    // Click anywhere outside the picker popovers closes them.
+    document.addEventListener('mousedown', e => {
+      if (e.target.closest('#wh-color-pop') || e.target.closest('#wh-style-pop')) return;
+      if (e.target.closest('#wh-color-picker') || e.target.closest('#wh-style-picker')) return;
+      closeAllPickerPops();
+    });
+
+    // Scroll / resize → close popovers (their absolute position would be stale).
+    window.addEventListener('scroll', closeAllPickerPops, true);
+    window.addEventListener('resize', closeAllPickerPops);
   }
 
   function setupDrag() {

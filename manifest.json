@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Web Highlighter 网页高亮标注",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "框选网页文字一键高亮，按域名+路径持久化保存，支持撤销、改色、拖动工具栏。",
   "permissions": ["storage", "activeTab"],
   "host_permissions": ["<all_urls>"],
