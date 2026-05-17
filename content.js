@@ -756,67 +756,117 @@
 
   // ---------- SPA / 自愈 ----------
 
-  // 把当前 DOM 中的 mark span 全部剥除（用于 URL 切换时清场）
-  function unwrapAllMarks() {
-    document.querySelectorAll('.wh-mark').forEach(unwrap);
+  // 批量 unwrap 一组 mark span，按 parent 去重再 normalize（修 M8 的 O(N²)）
+  function unwrapMarks(els) {
+    const parents = new Set();
+    els.forEach(el => {
+      const p = el.parentNode;
+      if (!p) return;
+      while (el.firstChild) p.insertBefore(el.firstChild, el);
+      p.removeChild(el);
+      parents.add(p);
+    });
+    parents.forEach(p => p.normalize());
   }
 
-  // 工具栏/弹窗/侧栏被外部 DOM 操作干掉后，自动重新挂回去
+  // 工具栏/弹窗/侧栏被外部 DOM 操作干掉后，自动重新挂回去 + 把 toolbar 钳回视口（修 I3）
   function ensureUIAttached() {
     if (toolbar && !document.body.contains(toolbar)) document.body.appendChild(toolbar);
     if (popup   && !document.body.contains(popup))   document.body.appendChild(popup);
     if (sidebar && !document.body.contains(sidebar)) document.body.appendChild(sidebar);
-  }
-
-  // URL 改变时：换 key、重读标注、清场、重 restore
-  let urlChangeBusy = false;
-  async function onUrlChange() {
-    const newKey = pageKey();
-    if (newKey === currentKey) return;
-    if (urlChangeBusy) return;
-    urlChangeBusy = true;
-    try {
-      currentKey = newKey;
-      // 上一页的撤销栈、活动 mark 失效
-      undoStack.length = 0;
-      activeMarkId = null;
-      if (popup) popup.style.display = 'none';
-      // 清掉视觉残留（旧 mark span 可能还挂在新 body 上的同名节点里，少见但要防）
-      unwrapAllMarks();
-      await reloadPageMarksOnly();
-      ensureUIAttached();
-      // SPA 通常异步渲染，给两次机会
-      setTimeout(() => {
-        const pending = restore();
-        if (pending > 0) setTimeout(restore, 1500);
-        refreshTheme();
-      }, 300);
-    } finally {
-      urlChangeBusy = false;
+    if (toolbar && toolbar.style.left && toolbar.style.top) {
+      const x = parseFloat(toolbar.style.left) || 0;
+      const y = parseFloat(toolbar.style.top) || 0;
+      const maxX = Math.max(0, window.innerWidth - toolbar.offsetWidth);
+      const maxY = Math.max(0, window.innerHeight - toolbar.offsetHeight);
+      const nx = Math.max(0, Math.min(maxX, x));
+      const ny = Math.max(0, Math.min(maxY, y));
+      if (nx !== x || ny !== y) {
+        toolbar.style.left = nx + 'px';
+        toolbar.style.top  = ny + 'px';
+      }
     }
   }
 
-  // 拦截 history.pushState / replaceState，让它们派发可监听的事件
-  (function patchHistory() {
+  // URL 改变：队列化处理（修 C1 + C2 + I1 + I2 + I7）
+  let uiReady = false;
+  let urlChangeRunning = false;
+  let urlChangeRequested = false;
+  async function onUrlChange() {
+    urlChangeRequested = true;
+    if (!uiReady) return;            // 启动 race 防护（C2）：UI 没建好先排队，buildUI 末尾会触发一次
+    if (urlChangeRunning) return;    // 重入：用循环处理，不丢事件
+    urlChangeRunning = true;
+    try {
+      while (urlChangeRequested) {
+        urlChangeRequested = false;
+        const newKey = pageKey();
+        if (newKey === currentKey) continue;
+        // 立刻刷主题（修 I2），避免 300ms 浅/深色闪
+        refreshTheme();
+        // 关 popup、清旧页失效状态
+        undoStack.length = 0;
+        activeMarkId = null;
+        if (popup) popup.style.display = 'none';
+        // 先 await，成功才换 key（修 I7：失败也不污染存储桶）
+        const nextMarksRes = await new Promise(resolve => {
+          chrome.storage.local.get([newKey], r => resolve(r[newKey] || []));
+        });
+        currentKey = newKey;
+        const nextMarks = nextMarksRes;
+        // 只 unwrap 在新页 marks 中已不存在的旧 span（修 I1：避免闪一下）
+        const keepIds = new Set(nextMarks.map(m => m.id));
+        const stale = Array.from(document.querySelectorAll('.wh-mark'))
+          .filter(el => !keepIds.has(el.dataset.whId));
+        unwrapMarks(stale);
+        cache.pageMarks = nextMarks;
+        // history.pushState 防覆盖自检（修 C4）：被别人换走就重新打补丁
+        ensureHistoryPatched();
+        // bodyObserver 看护节点可能被 SPA 整个换掉（修 C3）：重接
+        rebindBodyObservers();
+        ensureUIAttached();
+        // 让 SPA 完成异步渲染再 restore
+        setTimeout(() => {
+          const pending = restore();
+          if (pending > 0) setTimeout(restore, 1500);
+          refreshTheme();
+        }, 300);
+      }
+    } finally {
+      urlChangeRunning = false;
+    }
+  }
+
+  // ---------- history.pushState / replaceState 打补丁（C4 可重入） ----------
+  let ourPushState = null;
+  let ourReplaceState = null;
+  function ensureHistoryPatched() {
     const fire = () => window.dispatchEvent(new Event('wh:locationchange'));
-    const origPush = history.pushState;
-    const origReplace = history.replaceState;
-    history.pushState = function () {
-      const r = origPush.apply(this, arguments);
-      fire();
-      return r;
-    };
-    history.replaceState = function () {
-      const r = origReplace.apply(this, arguments);
-      fire();
-      return r;
-    };
-    window.addEventListener('popstate', fire);
-    window.addEventListener('hashchange', fire);
-  })();
+    if (history.pushState !== ourPushState) {
+      const orig = history.pushState;
+      ourPushState = function () {
+        const r = orig.apply(this, arguments);
+        fire();
+        return r;
+      };
+      try { history.pushState = ourPushState; } catch (e) {}
+    }
+    if (history.replaceState !== ourReplaceState) {
+      const orig = history.replaceState;
+      ourReplaceState = function () {
+        const r = orig.apply(this, arguments);
+        fire();
+        return r;
+      };
+      try { history.replaceState = ourReplaceState; } catch (e) {}
+    }
+  }
+  ensureHistoryPatched();
+  window.addEventListener('popstate', () => window.dispatchEvent(new Event('wh:locationchange')));
+  window.addEventListener('hashchange', () => window.dispatchEvent(new Event('wh:locationchange')));
   window.addEventListener('wh:locationchange', onUrlChange);
 
-  // MutationObserver：看护 UI + 监测大块新内容时重试 restore（懒加载/无限滚动）
+  // ---------- bodyObserver：UI 自愈 + 懒加载补救 ----------
   let restoreThrottle = 0;
   const bodyObserver = new MutationObserver((mutations) => {
     let uiGone = false;
@@ -835,33 +885,47 @@
       restoreThrottle = setTimeout(() => restore(), 800);
     }
   });
+  // 把观察目标记录下来，方便重 attach（修 C3）
+  let observedFirstChild = null;
+  function rebindBodyObservers() {
+    try { bodyObserver.disconnect(); } catch (e) {}
+    bodyObserver.observe(document.body, { childList: true, subtree: false });
+    observedFirstChild = document.body.firstElementChild || null;
+    if (observedFirstChild) {
+      bodyObserver.observe(observedFirstChild, { childList: true, subtree: true });
+    }
+    // theme observer 同样在新 body / html 上重接
+    rebindThemeObserver();
+  }
 
-  // ---------- 来自 background 的消息（覆盖前一个监听器位置不影响） ----------
-  // 上面已经注册过 onMessage，这里不重复
-
-  // 监听页面主题变化：1) 系统级偏好 2) html/body 的 class/style 变化（很多站靠这俩切主题）
+  // ---------- 主题监听 ----------
+  let themeObserver = null;
+  let themeRaf = 0;
+  function rebindThemeObserver() {
+    if (themeObserver) try { themeObserver.disconnect(); } catch (e) {}
+    themeObserver = new MutationObserver(() => {
+      cancelAnimationFrame(themeRaf);
+      themeRaf = requestAnimationFrame(refreshTheme);
+    });
+    const filter = { attributes: true, attributeFilter: ['class', 'style', 'data-theme', 'data-color-mode'] };
+    themeObserver.observe(document.documentElement, filter);
+    themeObserver.observe(document.body, filter);
+  }
   function watchTheme() {
     try {
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', refreshTheme);
     } catch (e) {}
-    const themeObserver = new MutationObserver(() => {
-      // 用 rAF 节流，避免 class 频繁变动时打架
-      cancelAnimationFrame(themeObserver._raf || 0);
-      themeObserver._raf = requestAnimationFrame(refreshTheme);
-    });
-    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-theme', 'data-color-mode'] });
-    themeObserver.observe(document.body,            { attributes: true, attributeFilter: ['class', 'style', 'data-theme', 'data-color-mode'] });
+    rebindThemeObserver();
   }
 
   // ---------- 启动 ----------
   loadAll().then(() => {
     buildUI();
-    bodyObserver.observe(document.body, { childList: true, subtree: false });
-    // 也观察一层 body 的子节点，捕捉 Next.js 这种把 #__next 内容整体替换的情况
-    if (document.body.firstElementChild) {
-      bodyObserver.observe(document.body.firstElementChild, { childList: true, subtree: true });
-    }
+    rebindBodyObservers();
     watchTheme();
+    uiReady = true;
+    // 排队中的 url change 现在跑（修 C2）
+    if (urlChangeRequested) onUrlChange();
     setTimeout(() => {
       const pending = restore();
       if (pending > 0) setTimeout(restore, 1500);

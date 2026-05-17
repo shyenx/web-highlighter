@@ -12,7 +12,12 @@
   flex-wrap: nowrap; white-space: nowrap; width: max-content; max-width: none;
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 12px;
+  transition: background-color .15s ease, color .15s ease, border-color .15s ease, box-shadow .15s ease;
 }
+#wh-toolbar button { transition: background-color .15s ease, color .15s ease; }
+#wh-sidebar { transition: background-color .15s ease, color .15s ease, border-color .15s ease; }
+#wh-sidebar .wh-item { transition: background-color .15s ease, color .15s ease; }
+#wh-popup { transition: background-color .15s ease, box-shadow .15s ease; }
 #wh-toolbar > * { flex-shrink: 0; }
 #wh-toolbar button { white-space: nowrap; }
 #wh-toolbar .wh-swatch {

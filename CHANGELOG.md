@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-05-17
+
+### Fixed
+- **Rapid SPA navigation no longer drops events**: `onUrlChange` now
+  queues with a request flag and re-runs after the in-flight pass
+  finishes, so back-to-back A→B→C navigations always land on C
+- **Startup race**: URL change events fired before the UI is built are
+  now queued and replayed once `buildUI` completes
+- **MutationObservers survive SPA root swaps**: `body` and theme
+  observers re-attach on every URL change (covers Next.js / React
+  replacing `#__next` / `#root`)
+- **`history.pushState` / `replaceState` self-heal**: re-patched on
+  every URL change if another extension or the page reassigned them
+- **No more brief un-highlight flash on SPA navigation**: only marks
+  whose id is absent from the new page's storage are unwrapped
+  (previously all marks were stripped immediately)
+- **No more 300 ms light/dark flash when navigating between pages of
+  opposite themes**: `refreshTheme` runs at the top of `onUrlChange`
+- **Storage isolation**: `currentKey` is now updated only after
+  storage read succeeds, so a transient `chrome.storage.local` failure
+  can no longer write the new page's marks under the old key
+- **Toolbar clamped to viewport** after self-heal (handles window
+  resize / mobile rotation while toolbar was hidden)
+- **Theme transitions** are now 150 ms eased instead of instant snaps
+
+### Performance
+- `unwrapMarks()` deduplicates parent nodes before calling
+  `normalize()`, dropping the O(N²) worst case to O(N) on pages with
+  many highlights
+
 ## [0.5.0] - 2026-05-17
 
 ### Added
