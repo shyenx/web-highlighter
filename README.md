@@ -20,7 +20,8 @@
 
 ### 特性
 
-- **框选即高亮** —— 选中文字立即用当前默认色高亮，不打扰阅读
+- **框选即高亮** —— 选中文字立即用当前默认色 + 当前样式标注，不打扰阅读
+- **4 种标注样式** —— 背景色 / 下划线 / 删除线 / 波浪线，工具栏即时切换
 - **5 种预设色** —— 黄 / 绿 / 粉 / 蓝 / 紫，工具栏一键切换默认色
 - **持久化保存** —— 按 `域名 + 路径` 自动存到本地，刷新 / 关浏览器都还在
 - **笔记批注** —— 给任意高亮加一段文字笔记，鼠标悬停查看
@@ -102,7 +103,8 @@
 
 ### Features
 
-- **Select-to-highlight** — Selecting text instantly applies the current color
+- **Select-to-highlight** — Selecting text instantly applies the current color and style
+- **4 mark styles** — Background, underline, strikethrough, wavy underline (switch on the fly)
 - **5 preset colors** — Yellow / Green / Pink / Blue / Purple
 - **Persistent** — Saved per `host + path`, survives reload and browser restart
 - **Notes** — Attach a text note to any highlight, shown on hover

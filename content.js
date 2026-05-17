@@ -5,20 +5,28 @@
 
   const PAGE_KEY = 'wh::' + location.host + location.pathname;
   const COLORS = ['#fff36b', '#a8e6a3', '#ffb3ba', '#bae1ff', '#e0bbff'];
+  const STYLES = [
+    { key: 'bg',        label: 'A', title: '背景色',  preview: c => `background:${c};` },
+    { key: 'underline', label: 'A', title: '下划线',  preview: c => `text-decoration:underline;text-decoration-color:${c};text-decoration-thickness:2px;text-underline-offset:2px;` },
+    { key: 'strike',    label: 'A', title: '删除线',  preview: c => `text-decoration:line-through;text-decoration-color:${c};text-decoration-thickness:2px;` },
+    { key: 'wavy',      label: 'A', title: '波浪线',  preview: c => `text-decoration:underline wavy;text-decoration-color:${c};text-decoration-thickness:1.5px;text-underline-offset:2px;` },
+  ];
 
   // ---------- 存储抽象（chrome.storage.local 是异步的，用内存缓存做同步访问） ----------
   const cache = {
     pageMarks: [],
     lastColor: COLORS[0],
+    lastStyle: 'bg',
     enabled: true,
     toolbarPos: null,
   };
 
   function loadAll() {
     return new Promise((resolve) => {
-      chrome.storage.local.get([PAGE_KEY, 'wh::lastColor', 'wh::enabled', 'wh::toolbarPos'], (res) => {
+      chrome.storage.local.get([PAGE_KEY, 'wh::lastColor', 'wh::lastStyle', 'wh::enabled', 'wh::toolbarPos'], (res) => {
         cache.pageMarks = res[PAGE_KEY] || [];
         cache.lastColor = res['wh::lastColor'] || COLORS[0];
+        cache.lastStyle = res['wh::lastStyle'] || 'bg';
         cache.enabled = res['wh::enabled'] !== false;
         cache.toolbarPos = res['wh::toolbarPos'] || null;
         resolve();
@@ -27,6 +35,7 @@
   }
   function saveMarks() { chrome.storage.local.set({ [PAGE_KEY]: cache.pageMarks }); }
   function saveLastColor() { chrome.storage.local.set({ 'wh::lastColor': cache.lastColor }); }
+  function saveLastStyle() { chrome.storage.local.set({ 'wh::lastStyle': cache.lastStyle }); }
   function saveEnabled() { chrome.storage.local.set({ 'wh::enabled': cache.enabled }); }
   function saveToolbarPos() { chrome.storage.local.set({ 'wh::toolbarPos': cache.toolbarPos }); }
 
@@ -45,6 +54,9 @@
     toolbar.innerHTML = `
       <div id="wh-drag" title="拖动">⋮⋮</div>
       ${COLORS.map(c => `<div class="wh-swatch" data-color="${c}" style="background:${c}"></div>`).join('')}
+      <div class="wh-sep"></div>
+      ${STYLES.map(s => `<button class="wh-style" data-style="${s.key}" title="${s.title}"><span style="${s.preview(cache.lastColor)}">${s.label}</span></button>`).join('')}
+      <div class="wh-sep"></div>
       <button id="wh-toggle"></button>
       <button id="wh-undo" title="撤销 (⌘/Ctrl+Shift+Z)">↶</button>
       <button id="wh-list" title="高亮列表">☰</button>
@@ -69,6 +81,9 @@
       <div style="display:flex;gap:4px;align-items:center;">
         ${COLORS.map(c => `<div class="wh-swatch" data-color="${c}" style="background:${c}"></div>`).join('')}
         <button id="wh-popup-del">删除</button>
+      </div>
+      <div style="display:flex;gap:4px;align-items:center;margin-top:4px;">
+        ${STYLES.map(s => `<button class="wh-style" data-style="${s.key}" title="${s.title}"><span style="${s.preview('#fff')}color:#fff;">${s.label}</span></button>`).join('')}
       </div>
       <div class="wh-note-row">
         <textarea id="wh-popup-note" placeholder="加一条笔记…"></textarea>
@@ -101,9 +116,43 @@
     toolbar.querySelectorAll('.wh-swatch').forEach(s => {
       s.classList.toggle('active', s.dataset.color === cache.lastColor);
     });
+    // 样式按钮：active + 同步预览颜色为当前默认色
+    toolbar.querySelectorAll('.wh-style').forEach(b => {
+      b.classList.toggle('active', b.dataset.style === cache.lastStyle);
+      const s = STYLES.find(x => x.key === b.dataset.style);
+      const span = b.querySelector('span');
+      if (span && s) span.setAttribute('style', s.preview(cache.lastColor));
+    });
     const btn = toolbar.querySelector('#wh-toggle');
     btn.textContent = cache.enabled ? '已开启' : '已关闭';
     btn.style.background = cache.enabled ? '#d4edda' : '#f8d7da';
+  }
+
+  // 给一个 span 应用色 + 样式
+  function applyAppearance(el, color, style) {
+    el.dataset.whStyle = style;
+    el.dataset.whColor = color;
+    // 清掉之前可能残留的内联
+    el.style.background = '';
+    el.style.textDecoration = '';
+    el.style.textDecorationColor = '';
+    if (style === 'bg') {
+      el.style.backgroundColor = color;
+    } else if (style === 'underline') {
+      el.style.textDecoration = 'underline';
+      el.style.textDecorationColor = color;
+      el.style.textDecorationThickness = '2px';
+      el.style.textUnderlineOffset = '2px';
+    } else if (style === 'strike') {
+      el.style.textDecoration = 'line-through';
+      el.style.textDecorationColor = color;
+      el.style.textDecorationThickness = '2px';
+    } else if (style === 'wavy') {
+      el.style.textDecoration = 'underline wavy';
+      el.style.textDecorationColor = color;
+      el.style.textDecorationThickness = '1.5px';
+      el.style.textUnderlineOffset = '2px';
+    }
   }
 
   function setupToolbarHandlers() {
@@ -116,6 +165,13 @@
         cache.lastColor = sw.dataset.color;
         refreshToolbar();
         setTimeout(saveLastColor, 0);
+        return;
+      }
+      const st = e.target.closest('.wh-style');
+      if (st) {
+        cache.lastStyle = st.dataset.style;
+        refreshToolbar();
+        setTimeout(saveLastStyle, 0);
         return;
       }
       if (e.target.id === 'wh-toggle') {
@@ -198,10 +254,30 @@
         return;
       }
       const sw = e.target.closest('.wh-swatch');
-      if (!sw || !activeMarkId) return;
-      changeMarkColor(activeMarkId, sw.dataset.color);
-      renderSidebar();
+      if (sw && activeMarkId) {
+        changeMarkColor(activeMarkId, sw.dataset.color);
+        // 同步 popup 内 style 按钮预览颜色
+        const m = cache.pageMarks.find(x => x.id === activeMarkId);
+        if (m) syncPopupStylePreview(m.color);
+        renderSidebar();
+        return;
+      }
+      const st = e.target.closest('.wh-style');
+      if (st && activeMarkId) {
+        changeMarkStyle(activeMarkId, st.dataset.style);
+        popup.querySelectorAll('.wh-style').forEach(b => b.classList.toggle('active', b.dataset.style === st.dataset.style));
+        renderSidebar();
+        return;
+      }
     });
+
+    function syncPopupStylePreview(color) {
+      popup.querySelectorAll('.wh-style').forEach(b => {
+        const s = STYLES.find(x => x.key === b.dataset.style);
+        const span = b.querySelector('span');
+        if (span && s) span.setAttribute('style', s.preview(color) + 'color:#fff;');
+      });
+    }
 
     document.addEventListener('mousedown', e => {
       if (e.target.closest('#wh-popup') || e.target.closest('#wh-toolbar') || e.target.closest('#wh-sidebar')) return;
@@ -212,10 +288,14 @@
         popup.style.display = 'flex';
         popup.style.top = (window.scrollY + r.bottom + 6) + 'px';
         popup.style.left = (window.scrollX + r.left) + 'px';
-        popup.querySelectorAll('.wh-swatch').forEach(s => {
-          s.classList.toggle('active', s.style.backgroundColor === m.style.backgroundColor);
-        });
         const mark = cache.pageMarks.find(x => x.id === activeMarkId);
+        const markColor = mark?.color || cache.lastColor;
+        const markStyle = mark?.style || 'bg';
+        popup.querySelectorAll('.wh-swatch').forEach(s => {
+          s.classList.toggle('active', s.dataset.color === markColor);
+        });
+        popup.querySelectorAll('.wh-style').forEach(b => b.classList.toggle('active', b.dataset.style === markStyle));
+        syncPopupStylePreview(markColor);
         popup.querySelector('#wh-popup-note').value = mark?.note || '';
       } else {
         popup.style.display = 'none';
@@ -303,29 +383,30 @@
     setTimeout(() => {
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
-      applyHighlight(sel.getRangeAt(0), cache.lastColor);
+      applyHighlight(sel.getRangeAt(0), cache.lastColor, cache.lastStyle);
       sel.removeAllRanges();
     }, 0);
   });
 
   // ---------- 高亮核心 ----------
-  function applyHighlight(range, color) {
+  function applyHighlight(range, color, style) {
     const id = 'h_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-    wrapRange(range, color, id);
+    wrapRange(range, color, id, '', style);
     const text = range.toString();
-    cache.pageMarks.push({ id, color, text, ctx: contextOf(text), note: '' });
+    cache.pageMarks.push({ id, color, style, text, ctx: contextOf(text), note: '' });
     saveMarks();
     pushUndo({ type: 'add', id });
     renderSidebar();
   }
 
-  function wrapRange(range, color, id, note) {
+  function wrapRange(range, color, id, note, style) {
     const nodes = textNodesInRange(range);
+    const st = style || 'bg';
     nodes.forEach(n => {
       const span = document.createElement('span');
       span.className = 'wh-mark';
       span.dataset.whId = id;
-      span.style.backgroundColor = color;
+      applyAppearance(span, color, st);
       if (note) { span.dataset.whNote = '1'; span.title = note; }
       n.parentNode.insertBefore(span, n);
       span.appendChild(n);
@@ -377,11 +458,23 @@
   function changeMarkColor(id, color, skipUndo) {
     const m = cache.pageMarks.find(x => x.id === id);
     const prev = m ? m.color : null;
+    const style = m?.style || 'bg';
     document.querySelectorAll(`.wh-mark[data-wh-id="${id}"]`).forEach(el => {
-      el.style.backgroundColor = color;
+      applyAppearance(el, color, style);
     });
     if (m) { m.color = color; saveMarks(); }
     if (!skipUndo && prev != null) pushUndo({ type: 'recolor', id, prev });
+  }
+
+  function changeMarkStyle(id, style, skipUndo) {
+    const m = cache.pageMarks.find(x => x.id === id);
+    const prev = m ? (m.style || 'bg') : null;
+    const color = m?.color || cache.lastColor;
+    document.querySelectorAll(`.wh-mark[data-wh-id="${id}"]`).forEach(el => {
+      applyAppearance(el, color, style);
+    });
+    if (m) { m.style = style; saveMarks(); }
+    if (!skipUndo && prev != null) pushUndo({ type: 'restyle', id, prev });
   }
 
   function removeMark(id, skipUndo) {
@@ -398,11 +491,12 @@
     if (!a) return;
     if (a.type === 'add') removeMark(a.id, true);
     else if (a.type === 'recolor') changeMarkColor(a.id, a.prev, true);
+    else if (a.type === 'restyle') changeMarkStyle(a.id, a.prev, true);
     else if (a.type === 'note') setMarkNote(a.id, a.prev);
     else if (a.type === 'remove') {
       const m = a.snapshot;
       const r = findTextRange(m.text, m.ctx);
-      if (r) wrapRange(r, m.color, m.id, m.note);
+      if (r) wrapRange(r, m.color, m.id, m.note, m.style);
       cache.pageMarks.push(m);
       saveMarks();
     } else if (a.type === 'clear') {
@@ -410,7 +504,7 @@
       saveMarks();
       a.marks.forEach(m => {
         const r = findTextRange(m.text, m.ctx);
-        if (r) wrapRange(r, m.color, m.id, m.note);
+        if (r) wrapRange(r, m.color, m.id, m.note, m.style);
       });
     }
     renderSidebar();
@@ -479,7 +573,7 @@
     cache.pageMarks.forEach(m => {
       if (document.querySelector(`.wh-mark[data-wh-id="${m.id}"]`)) return;
       const r = findTextRange(m.text, m.ctx);
-      if (r) wrapRange(r, m.color, m.id, m.note);
+      if (r) wrapRange(r, m.color, m.id, m.note, m.style);
     });
     renderSidebar();
   }
