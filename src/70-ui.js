@@ -267,27 +267,36 @@
       }
     });
 
-    // Color picker popover: pick a swatch.
-    wh.colorPop.addEventListener('mousedown', e => {
-      e.stopPropagation();
-      e.preventDefault();
+    // Color picker popover: hover a swatch to apply (no click needed). Click
+    // also works and closes the popover.
+    wh.colorPop.addEventListener('mouseover', e => {
       const sw = e.target.closest('.wh-swatch');
       if (!sw) return;
+      if (wh.cache.lastColor === sw.dataset.color) return;
       wh.cache.lastColor = sw.dataset.color;
       wh.refreshToolbar();
       setTimeout(wh.saveLastColor, 0);
+    });
+    wh.colorPop.addEventListener('mousedown', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!e.target.closest('.wh-swatch')) return;
       closeAllPickerPops();
     });
 
-    // Style picker popover: pick a style.
-    wh.stylePop.addEventListener('mousedown', e => {
-      e.stopPropagation();
-      e.preventDefault();
+    // Style picker popover: hover to apply; click to apply + close.
+    wh.stylePop.addEventListener('mouseover', e => {
       const st = e.target.closest('.wh-style');
       if (!st) return;
+      if (wh.cache.lastStyle === st.dataset.style) return;
       wh.cache.lastStyle = st.dataset.style;
       wh.refreshToolbar();
       setTimeout(wh.saveLastStyle, 0);
+    });
+    wh.stylePop.addEventListener('mousedown', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!e.target.closest('.wh-style')) return;
       closeAllPickerPops();
     });
 

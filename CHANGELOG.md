@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2026-05-17
+
+### Changed
+- **Options inside picker popovers select on hover** — slide the mouse
+  over a swatch or style and it applies immediately. Click still works
+  and additionally closes the popover. Moving the mouse away from both
+  popover and trigger closes it after 200 ms (last hovered option is
+  what stays selected).
+- Hover-feedback CSS: swatches scale up slightly on hover; style buttons
+  get a subtle background.
+
 ## [0.6.2] - 2026-05-17
 
 ### Changed
