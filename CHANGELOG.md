@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-05-17
+
+### Added
+- **Page-aware dark theme**: toolbar, sidebar, and popup now follow the
+  host page's actual background — not the OS — so they match sites that
+  ship their own dark mode (or override the system preference).
+- Detection reads the computed background color of `<body>` / `<html>`,
+  computes luminance, and falls back to `prefers-color-scheme` if both
+  are transparent.
+- A `MutationObserver` watches `html` / `body` `class`, `style`,
+  `data-theme`, `data-color-mode` attributes (covers the common
+  toggle patterns: `.dark` class on html, `data-theme="dark"` on body,
+  etc.), and re-detects on `prefers-color-scheme` change.
+- Theme is re-applied after SPA navigation as well.
+
 ## [0.4.0] - 2026-05-17
 
 ### Added

@@ -162,6 +162,7 @@
     setupDrag();
     setupPopupHandlers();
     setupSidebarHandlers();
+    refreshTheme();
   }
 
   function refreshToolbar() {
@@ -206,6 +207,45 @@
       el.style.textDecorationColor = color;
       el.style.textDecorationThickness = '1.5px';
       el.style.textUnderlineOffset = '2px';
+    }
+  }
+
+  // ---------- 页面主题检测（light / dark） ----------
+  function parseRgb(str) {
+    // matches "rgb(r,g,b)" / "rgba(r,g,b,a)"
+    const m = /rgba?\(([^)]+)\)/i.exec(str || '');
+    if (!m) return null;
+    const [r, g, b, a = 1] = m[1].split(',').map(s => parseFloat(s));
+    return { r, g, b, a };
+  }
+  function luminance({ r, g, b }) {
+    // 简化版相对亮度（不做 gamma 校正，够用了）
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  }
+  function detectPageTheme() {
+    // 取 body 背景，若透明就回退到 html，再回退到 prefers-color-scheme
+    const targets = [document.body, document.documentElement];
+    for (const el of targets) {
+      if (!el) continue;
+      const rgb = parseRgb(getComputedStyle(el).backgroundColor);
+      if (rgb && rgb.a > 0.1) {
+        return luminance(rgb) < 0.5 ? 'dark' : 'light';
+      }
+    }
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+    return 'light';
+  }
+  function applyTheme(theme) {
+    [toolbar, popup, sidebar].forEach(el => {
+      if (el) el.dataset.whTheme = theme;
+    });
+  }
+  let currentTheme = 'light';
+  function refreshTheme() {
+    const t = detectPageTheme();
+    if (t !== currentTheme) {
+      currentTheme = t;
+      applyTheme(t);
     }
   }
 
@@ -749,6 +789,7 @@
       setTimeout(() => {
         const pending = restore();
         if (pending > 0) setTimeout(restore, 1500);
+        refreshTheme();
       }, 300);
     } finally {
       urlChangeBusy = false;
@@ -798,6 +839,20 @@
   // ---------- 来自 background 的消息（覆盖前一个监听器位置不影响） ----------
   // 上面已经注册过 onMessage，这里不重复
 
+  // 监听页面主题变化：1) 系统级偏好 2) html/body 的 class/style 变化（很多站靠这俩切主题）
+  function watchTheme() {
+    try {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', refreshTheme);
+    } catch (e) {}
+    const themeObserver = new MutationObserver(() => {
+      // 用 rAF 节流，避免 class 频繁变动时打架
+      cancelAnimationFrame(themeObserver._raf || 0);
+      themeObserver._raf = requestAnimationFrame(refreshTheme);
+    });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-theme', 'data-color-mode'] });
+    themeObserver.observe(document.body,            { attributes: true, attributeFilter: ['class', 'style', 'data-theme', 'data-color-mode'] });
+  }
+
   // ---------- 启动 ----------
   loadAll().then(() => {
     buildUI();
@@ -806,9 +861,11 @@
     if (document.body.firstElementChild) {
       bodyObserver.observe(document.body.firstElementChild, { childList: true, subtree: true });
     }
+    watchTheme();
     setTimeout(() => {
       const pending = restore();
       if (pending > 0) setTimeout(restore, 1500);
+      refreshTheme();
     }, 300);
   });
 })();
