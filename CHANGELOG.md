@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-05-17
+
+### Fixed
+- **Pages failing to load after installing v0.5.1**: rolled back the
+  aggressive SPA-related changes (history re-patching on every URL
+  change, MutationObserver re-binding on every URL change, the
+  queued URL-change loop). Reverted to the simpler v0.3.0-style
+  single-pass logic that proved stable.
+
+### Kept (from v0.5.1)
+- CSS transitions on theme switch (M4)
+- Batched `unwrapMarks()` with parent dedup before normalize (M8)
+- Toolbar viewport clamping in `ensureUIAttached` (I3)
+- Storage isolation: `currentKey` set only after storage read
+  succeeds (I7)
+- Theme refresh at top of `onUrlChange` to avoid 300 ms flash (I2)
+- Only unwrap stale marks on navigation, not all marks (I1)
+
+### Removed (will revisit in v0.6.0 with proper testing)
+- Queue-based URL change loop (C1)
+- `ensureHistoryPatched` re-patch on every URL change (C4)
+- `rebindBodyObservers` / `rebindThemeObserver` on every URL change (C3)
+- `uiReady` startup race guard (C2) — single-pass logic doesn't need it
+
 ## [0.5.1] - 2026-05-17
 
 ### Fixed

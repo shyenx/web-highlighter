@@ -788,85 +788,65 @@
     }
   }
 
-  // URL 改变：队列化处理（修 C1 + C2 + I1 + I2 + I7）
-  let uiReady = false;
-  let urlChangeRunning = false;
-  let urlChangeRequested = false;
+  // URL 改变时：换 key、重读标注、重 restore（v0.3.0 风格的简单逻辑 + I7 修复）
+  let urlChangeBusy = false;
   async function onUrlChange() {
-    urlChangeRequested = true;
-    if (!uiReady) return;            // 启动 race 防护（C2）：UI 没建好先排队，buildUI 末尾会触发一次
-    if (urlChangeRunning) return;    // 重入：用循环处理，不丢事件
-    urlChangeRunning = true;
+    const newKey = pageKey();
+    if (newKey === currentKey) return;
+    if (urlChangeBusy) return;
+    urlChangeBusy = true;
     try {
-      while (urlChangeRequested) {
-        urlChangeRequested = false;
-        const newKey = pageKey();
-        if (newKey === currentKey) continue;
-        // 立刻刷主题（修 I2），避免 300ms 浅/深色闪
+      // 立刻刷主题（修 I2），避免 300ms 浅/深色闪
+      if (toolbar) refreshTheme();
+      // 上一页的撤销栈、活动 mark 失效
+      undoStack.length = 0;
+      activeMarkId = null;
+      if (popup) popup.style.display = 'none';
+      // 先 await，成功才换 key（修 I7：失败不污染存储桶）
+      const nextMarks = await new Promise(resolve => {
+        chrome.storage.local.get([newKey], r => resolve(r[newKey] || []));
+      });
+      currentKey = newKey;
+      // 只 unwrap 新页 marks 中已不存在的旧 span（修 I1：避免闪一下）
+      const keepIds = new Set(nextMarks.map(m => m.id));
+      const stale = Array.from(document.querySelectorAll('.wh-mark'))
+        .filter(el => !keepIds.has(el.dataset.whId));
+      unwrapMarks(stale);
+      cache.pageMarks = nextMarks;
+      ensureUIAttached();
+      setTimeout(() => {
+        const pending = restore();
+        if (pending > 0) setTimeout(restore, 1500);
         refreshTheme();
-        // 关 popup、清旧页失效状态
-        undoStack.length = 0;
-        activeMarkId = null;
-        if (popup) popup.style.display = 'none';
-        // 先 await，成功才换 key（修 I7：失败也不污染存储桶）
-        const nextMarksRes = await new Promise(resolve => {
-          chrome.storage.local.get([newKey], r => resolve(r[newKey] || []));
-        });
-        currentKey = newKey;
-        const nextMarks = nextMarksRes;
-        // 只 unwrap 在新页 marks 中已不存在的旧 span（修 I1：避免闪一下）
-        const keepIds = new Set(nextMarks.map(m => m.id));
-        const stale = Array.from(document.querySelectorAll('.wh-mark'))
-          .filter(el => !keepIds.has(el.dataset.whId));
-        unwrapMarks(stale);
-        cache.pageMarks = nextMarks;
-        // history.pushState 防覆盖自检（修 C4）：被别人换走就重新打补丁
-        ensureHistoryPatched();
-        // bodyObserver 看护节点可能被 SPA 整个换掉（修 C3）：重接
-        rebindBodyObservers();
-        ensureUIAttached();
-        // 让 SPA 完成异步渲染再 restore
-        setTimeout(() => {
-          const pending = restore();
-          if (pending > 0) setTimeout(restore, 1500);
-          refreshTheme();
-        }, 300);
-      }
+      }, 300);
     } finally {
-      urlChangeRunning = false;
+      urlChangeBusy = false;
     }
   }
 
-  // ---------- history.pushState / replaceState 打补丁（C4 可重入） ----------
-  let ourPushState = null;
-  let ourReplaceState = null;
-  function ensureHistoryPatched() {
+  // 拦截 history.pushState / replaceState，让它们派发可监听的事件（一次性，不重 patch）
+  (function patchHistory() {
     const fire = () => window.dispatchEvent(new Event('wh:locationchange'));
-    if (history.pushState !== ourPushState) {
-      const orig = history.pushState;
-      ourPushState = function () {
-        const r = orig.apply(this, arguments);
+    const origPush = history.pushState;
+    const origReplace = history.replaceState;
+    try {
+      history.pushState = function () {
+        const r = origPush.apply(this, arguments);
         fire();
         return r;
       };
-      try { history.pushState = ourPushState; } catch (e) {}
-    }
-    if (history.replaceState !== ourReplaceState) {
-      const orig = history.replaceState;
-      ourReplaceState = function () {
-        const r = orig.apply(this, arguments);
+      history.replaceState = function () {
+        const r = origReplace.apply(this, arguments);
         fire();
         return r;
       };
-      try { history.replaceState = ourReplaceState; } catch (e) {}
-    }
-  }
-  ensureHistoryPatched();
-  window.addEventListener('popstate', () => window.dispatchEvent(new Event('wh:locationchange')));
-  window.addEventListener('hashchange', () => window.dispatchEvent(new Event('wh:locationchange')));
+    } catch (e) {}
+    window.addEventListener('popstate', fire);
+    window.addEventListener('hashchange', fire);
+  })();
   window.addEventListener('wh:locationchange', onUrlChange);
 
-  // ---------- bodyObserver：UI 自愈 + 懒加载补救 ----------
+  // MutationObserver：看护 UI + 监测大块新内容时重试 restore（懒加载/无限滚动）
   let restoreThrottle = 0;
   const bodyObserver = new MutationObserver((mutations) => {
     let uiGone = false;
@@ -885,47 +865,29 @@
       restoreThrottle = setTimeout(() => restore(), 800);
     }
   });
-  // 把观察目标记录下来，方便重 attach（修 C3）
-  let observedFirstChild = null;
-  function rebindBodyObservers() {
-    try { bodyObserver.disconnect(); } catch (e) {}
-    bodyObserver.observe(document.body, { childList: true, subtree: false });
-    observedFirstChild = document.body.firstElementChild || null;
-    if (observedFirstChild) {
-      bodyObserver.observe(observedFirstChild, { childList: true, subtree: true });
-    }
-    // theme observer 同样在新 body / html 上重接
-    rebindThemeObserver();
-  }
 
-  // ---------- 主题监听 ----------
-  let themeObserver = null;
-  let themeRaf = 0;
-  function rebindThemeObserver() {
-    if (themeObserver) try { themeObserver.disconnect(); } catch (e) {}
-    themeObserver = new MutationObserver(() => {
-      cancelAnimationFrame(themeRaf);
-      themeRaf = requestAnimationFrame(refreshTheme);
+  // 监听页面主题变化
+  function watchTheme() {
+    try {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', refreshTheme);
+    } catch (e) {}
+    const themeObserver = new MutationObserver(() => {
+      cancelAnimationFrame(themeObserver._raf || 0);
+      themeObserver._raf = requestAnimationFrame(refreshTheme);
     });
     const filter = { attributes: true, attributeFilter: ['class', 'style', 'data-theme', 'data-color-mode'] };
     themeObserver.observe(document.documentElement, filter);
     themeObserver.observe(document.body, filter);
   }
-  function watchTheme() {
-    try {
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', refreshTheme);
-    } catch (e) {}
-    rebindThemeObserver();
-  }
 
   // ---------- 启动 ----------
   loadAll().then(() => {
     buildUI();
-    rebindBodyObservers();
+    bodyObserver.observe(document.body, { childList: true, subtree: false });
+    if (document.body.firstElementChild) {
+      bodyObserver.observe(document.body.firstElementChild, { childList: true, subtree: true });
+    }
     watchTheme();
-    uiReady = true;
-    // 排队中的 url change 现在跑（修 C2）
-    if (urlChangeRequested) onUrlChange();
     setTimeout(() => {
       const pending = restore();
       if (pending > 0) setTimeout(restore, 1500);
