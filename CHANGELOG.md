@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-05-17
+
+### Added
+- **SPA support**: the toolbar and highlights now survive client-side
+  navigation on React / Vue / Next.js sites. The extension patches
+  `history.pushState` / `replaceState`, and listens for `popstate` /
+  `hashchange`. On URL change it swaps the storage key, reloads marks
+  for the new page, and re-runs restore.
+- **Self-healing UI**: a `MutationObserver` on `document.body` re-attaches
+  the toolbar / popup / sidebar if the host page removes them
+- **Lazy content restore**: when the page injects significant new DOM
+  (infinite scroll, lazy-loaded articles), a throttled re-restore runs
+  so highlights inside newly-rendered content show up
+
+### Fixed
+- Toolbar disappearing on anthropic.com and other Next.js sites after
+  client-side navigation
+
 ## [0.2.1] - 2026-05-17
 
 ### Fixed

@@ -77,7 +77,6 @@
 
 - 特殊页面（`chrome://`、Chrome Web Store、PDF 内嵌阅读器）浏览器禁止注入
 - 网页原文被改 / 翻译 / 大幅重排后，标注可能定位失败
-- SPA 路由切换不会自动 restore，需要手动刷新
 - 同一段文字多处出现时，恢复用上下文匹配第一处
 
 ### 路线图
@@ -85,7 +84,7 @@
 - [ ] Options page：跨页面高亮看板，按域名 / 时间分组
 - [ ] 导出 Markdown / 复制为引用块
 - [ ] 锚点 fallback：除了文本匹配再加 XPath / CSS selector
-- [ ] SPA 路由变化自动 restore
+- [x] SPA 路由变化自动 restore（v0.3.0）
 - [ ] 截图导出（含高亮）
 - [ ] 多语言（i18n）
 
@@ -139,7 +138,6 @@ Highlights are implemented by splitting text nodes within the selection range an
 
 - Cannot inject into restricted pages (`chrome://`, Chrome Web Store, embedded PDF viewer)
 - Highlights may fail to restore if the original page text changes significantly
-- SPA route changes do not auto-restore; manual reload required
 - When the same text appears multiple times, restoration matches the first occurrence using context
 
 ### License
