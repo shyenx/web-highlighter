@@ -13,8 +13,9 @@
   let urlChangeBusy = false;
   wh.onUrlChange = async function onUrlChange() {
     const newKey = wh.pageKey();
-    if (newKey === wh.currentKey) return;
-    if (urlChangeBusy) return;
+    if (newKey === wh.currentKey) { console.log('[wh] onUrlChange noop (same key=' + newKey + ')'); return; }
+    if (urlChangeBusy) { console.log('[wh] onUrlChange busy, skipping'); return; }
+    console.log('[wh] onUrlChange: ' + wh.currentKey + ' → ' + newKey);
     urlChangeBusy = true;
     try {
       // Refresh theme immediately to avoid a 300 ms light/dark flash.

@@ -64,6 +64,7 @@
   });
 
   // ---------- Boot ----------
+  console.log('[wh] BOOT url=' + location.href + ' pageKey=' + wh.pageKey() + ' currentKey=' + wh.currentKey);
   wh.loadAll().then(() => {
     wh.buildUI();
     wh.bodyObserver.observe(document.body, { childList: true, subtree: false });

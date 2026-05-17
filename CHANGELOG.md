@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4] - 2026-05-17 (debug build)
+
+### Added (temporary)
+- Verbose `[wh]` console logging in `loadAll` / `saveMarks` / `safeSet` /
+  `applyHighlight` / `restore` / `onUrlChange` / boot — used to diagnose
+  a reported "highlights vanish after refresh" issue on anthropic.com.
+  Will be removed in the next release.
+
 ## [0.6.3] - 2026-05-17
 
 ### Changed
