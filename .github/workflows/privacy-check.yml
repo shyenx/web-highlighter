@@ -1,0 +1,30 @@
+name: Privacy Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  no-network:
+    name: No network calls in content/background scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Grep for network primitives
+        run: |
+          set -e
+          # Source files that ship to users (exclude docs, CI, build).
+          FILES=$(find src background.js -type f \( -name '*.js' -o -name '*.ts' \) 2>/dev/null)
+          echo "Checking files:"
+          echo "$FILES"
+          echo
+          PATTERN='\b(fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon|navigator\.sendBeacon|chrome\.runtime\.connectNative|chrome\.runtime\.sendNativeMessage)\b'
+          if echo "$FILES" | xargs grep -nE "$PATTERN" 2>/dev/null; then
+            echo
+            echo "ERROR: Network primitive found in shipped source. The README"
+            echo "claims this extension makes zero network calls. If you really"
+            echo "need a network call, update README + privacy policy first."
+            exit 1
+          fi
+          echo "OK: no network primitives found in shipped source."

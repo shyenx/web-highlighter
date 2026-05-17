@@ -8,12 +8,25 @@ There is no build step. Edit files directly and reload the extension at `chrome:
 
 ```
 web-highlighter-ext/
-├── manifest.json     # MV3 manifest
-├── background.js     # Service worker (icon click + commands)
-├── content.js        # Main logic, injected into all pages
-├── content.css       # Styles for toolbar, popup, sidebar
-└── icons/            # 16/32/48/128 PNG icons
+├── manifest.json        # MV3 manifest
+├── background.js        # Service worker (icon click + commands)
+├── content.css          # Styles for toolbar, popup, sidebar
+├── src/                 # Content script modules, loaded in numbered order
+│   ├── 10-i18n.js       # I18N dictionary + t() + language detection
+│   ├── 20-core.js       # Constants + cache + undo stack + UI refs
+│   ├── 30-storage.js    # chrome.storage wrappers + per-page key
+│   ├── 40-range.js      # Range/text-node ops + applyAppearance
+│   ├── 50-theme.js      # Page-bg theme detection + watchers
+│   ├── 60-mark.js       # Highlight / recolor / restyle / delete / undo / restore
+│   ├── 70-ui.js         # buildUI + handlers + renderSidebar + relocalize
+│   ├── 80-spa.js        # URL change handling + history patch + MutationObserver
+│   └── 90-content.js    # Entry: install guard + listeners + boot
+└── icons/               # 16/32/48/128 PNG icons
 ```
+
+All modules share state through a `window.__wh` namespace (content scripts run
+in an isolated world, so this does not pollute the host page). Load order is
+declared in `manifest.json` `content_scripts.js` array.
 
 ## Pull request checklist
 

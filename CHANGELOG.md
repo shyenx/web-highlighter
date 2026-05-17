@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-05-17
+
+### Changed (refactor — no behaviour changes)
+- **Split `content.js` into 9 modules under `src/`** loaded in order from
+  the manifest (`10-i18n.js` through `90-content.js`). Each is an IIFE
+  that shares state through a `window.__wh` namespace. Pre-split file
+  was 900 lines in a single IIFE; new files are 50–280 lines each with
+  clear boundaries (i18n / core state / storage / range ops / theme /
+  mark operations / UI / SPA / entry point).
+- Header comments at the top of each file explain its scope and any
+  cross-module assumptions.
+
+### Added
+- **Sidebar items are keyboard-accessible** (`tabindex="0"`, `role="button"`,
+  Enter/Space activate). Was M7 from code review.
+- **Localized tooltip** on the EN/中 language toggle button (`Switch to
+  中文` / `切换到 English`). Was M3.
+- **CI workflow `privacy-check.yml`** greps shipped source for `fetch`,
+  `XMLHttpRequest`, `WebSocket`, `sendBeacon`, native messaging — fails
+  the build if any appear. Keeps the README's "zero network requests"
+  promise honest going forward.
+
+### Not yet in 0.6.0 (planned for 0.6.x)
+- I5: parse modern color formats (`color(srgb …)`, `oklch(…)`) in theme detection
+- I6: luminance deadband to avoid theme flicker on mid-gray pages
+- C1–C4: SPA improvements that were rolled back in 0.5.2 — to be re-introduced
+  one at a time with explicit testing on anthropic.com / heygen / GitHub
+
 ## [0.5.3] - 2026-05-17
 
 ### Fixed
