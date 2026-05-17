@@ -9,9 +9,12 @@
   background: #fff; border: 1px solid #ddd; border-radius: 10px;
   box-shadow: 0 4px 16px rgba(0,0,0,.12); padding: 8px;
   display: flex; gap: 6px; align-items: center;
+  flex-wrap: nowrap; white-space: nowrap; width: max-content; max-width: none;
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 12px;
 }
+#wh-toolbar > * { flex-shrink: 0; }
+#wh-toolbar button { white-space: nowrap; }
 #wh-toolbar .wh-swatch {
   width: 20px; height: 20px; border-radius: 50%; cursor: pointer;
   border: 2px solid transparent; box-sizing: border-box;
