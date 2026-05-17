@@ -119,10 +119,17 @@
     document.body.appendChild(toolbar);
 
     if (cache.toolbarPos) {
-      toolbar.style.left = cache.toolbarPos.left + 'px';
-      toolbar.style.top = cache.toolbarPos.top + 'px';
+      // 先钳到当前视口（修启动时位置可能在屏外的 bug）
+      const w = Math.max(0, window.innerWidth - 280);  // 280 = toolbar 估算宽度
+      const h = Math.max(0, window.innerHeight - 40);  // 40  = toolbar 估算高度
+      const left = Math.max(0, Math.min(w, cache.toolbarPos.left));
+      const top  = Math.max(0, Math.min(h, cache.toolbarPos.top));
+      toolbar.style.left = left + 'px';
+      toolbar.style.top  = top  + 'px';
       toolbar.style.right = 'auto';
       toolbar.style.bottom = 'auto';
+      // UI 渲染完后再用真实尺寸精确钳一次
+      requestAnimationFrame(() => ensureUIAttached());
     }
 
     popup = document.createElement('div');

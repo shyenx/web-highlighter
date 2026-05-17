@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-05-17
+
+### Fixed
+- **Toolbar disappearing on smaller windows**: if the toolbar was
+  previously dragged to a position that's now off-screen (e.g. on a
+  laptop after using a larger monitor), `buildUI` would still apply the
+  stored coordinates verbatim, leaving the toolbar invisible. Now
+  clamps to the current viewport on startup, then re-clamps with real
+  measured dimensions on the next animation frame. (Discovered when a
+  user reported the toolbar missing from example.com but showing on
+  GitHub — only difference was viewport size at the time of last drag.)
+
 ## [0.5.2] - 2026-05-17
 
 ### Fixed
