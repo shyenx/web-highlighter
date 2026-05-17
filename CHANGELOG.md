@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-05-17
+
+### Added
+- **Bilingual UI (English / 简体中文)**: every visible string in the
+  toolbar, inline popup, sidebar, tooltips, placeholders, and the
+  "clear all" confirm dialog is now translated
+- Toolbar gains a **`EN / 中` toggle button**; click switches the UI
+  language instantly without losing position or marks
+- Language defaults to the browser's `navigator.language` on first run
+  (Chinese variants → `zh`, everything else → `en`)
+- Preference persists across sessions in `chrome.storage.local`
+
+### Changed
+- README split into separate `README.md` (English, primary) and
+  `README.zh-CN.md` (Chinese), cross-linked at the top of each
+- Toolbar `×` (hide) button now has a localized tooltip
+
 ## [0.3.0] - 2026-05-17
 
 ### Added

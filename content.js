@@ -7,11 +7,37 @@
   let currentKey = pageKey();
   const COLORS = ['#fff36b', '#a8e6a3', '#ffb3ba', '#bae1ff', '#e0bbff'];
   const STYLES = [
-    { key: 'bg',        label: 'A', title: '背景色',  preview: c => `background:${c};` },
-    { key: 'underline', label: 'A', title: '下划线',  preview: c => `text-decoration:underline;text-decoration-color:${c};text-decoration-thickness:2px;text-underline-offset:2px;` },
-    { key: 'strike',    label: 'A', title: '删除线',  preview: c => `text-decoration:line-through;text-decoration-color:${c};text-decoration-thickness:2px;` },
-    { key: 'wavy',      label: 'A', title: '波浪线',  preview: c => `text-decoration:underline wavy;text-decoration-color:${c};text-decoration-thickness:1.5px;text-underline-offset:2px;` },
+    { key: 'bg',        label: 'A', preview: c => `background:${c};` },
+    { key: 'underline', label: 'A', preview: c => `text-decoration:underline;text-decoration-color:${c};text-decoration-thickness:2px;text-underline-offset:2px;` },
+    { key: 'strike',    label: 'A', preview: c => `text-decoration:line-through;text-decoration-color:${c};text-decoration-thickness:2px;` },
+    { key: 'wavy',      label: 'A', preview: c => `text-decoration:underline wavy;text-decoration-color:${c};text-decoration-thickness:1.5px;text-underline-offset:2px;` },
   ];
+
+  // ---------- i18n ----------
+  const I18N = {
+    zh: {
+      enabled: '已开启', disabled: '已关闭',
+      drag: '拖动', undo: '撤销 (⌘/Ctrl+Shift+Z)', list: '高亮列表',
+      clear: '清除', export: '导出', hide: '隐藏', langToggle: 'EN',
+      style_bg: '背景色', style_underline: '下划线', style_strike: '删除线', style_wavy: '波浪线',
+      popup_del: '删除', popup_save: '保存笔记', popup_note_ph: '加一条笔记…',
+      sidebar_title: '高亮列表', sidebar_close: '关闭', sidebar_empty: '还没有高亮',
+      confirm_clear: '清除本页全部高亮？',
+    },
+    en: {
+      enabled: 'Enabled', disabled: 'Disabled',
+      drag: 'Drag', undo: 'Undo (⌘/Ctrl+Shift+Z)', list: 'Highlights',
+      clear: 'Clear', export: 'Export', hide: 'Hide', langToggle: '中',
+      style_bg: 'Background', style_underline: 'Underline', style_strike: 'Strikethrough', style_wavy: 'Wavy',
+      popup_del: 'Delete', popup_save: 'Save note', popup_note_ph: 'Add a note…',
+      sidebar_title: 'Highlights', sidebar_close: 'Close', sidebar_empty: 'No highlights yet',
+      confirm_clear: 'Clear all highlights on this page?',
+    },
+  };
+  function detectLang() {
+    return (navigator.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en';
+  }
+  function t(key) { return (I18N[cache.lang] || I18N.en)[key] || key; }
 
   // ---------- 存储抽象（chrome.storage.local 是异步的，用内存缓存做同步访问） ----------
   const cache = {
@@ -20,16 +46,18 @@
     lastStyle: 'bg',
     enabled: true,
     toolbarPos: null,
+    lang: detectLang(),
   };
 
   function loadAll() {
     return new Promise((resolve) => {
-      chrome.storage.local.get([currentKey, 'wh::lastColor', 'wh::lastStyle', 'wh::enabled', 'wh::toolbarPos'], (res) => {
+      chrome.storage.local.get([currentKey, 'wh::lastColor', 'wh::lastStyle', 'wh::enabled', 'wh::toolbarPos', 'wh::lang'], (res) => {
         cache.pageMarks = res[currentKey] || [];
         cache.lastColor = res['wh::lastColor'] || COLORS[0];
         cache.lastStyle = res['wh::lastStyle'] || 'bg';
         cache.enabled = res['wh::enabled'] !== false;
         cache.toolbarPos = res['wh::toolbarPos'] || null;
+        cache.lang = res['wh::lang'] || detectLang();
         resolve();
       });
     });
@@ -60,6 +88,7 @@
   function saveLastStyle()   { safeSet({ 'wh::lastStyle': cache.lastStyle }); }
   function saveEnabled()     { safeSet({ 'wh::enabled': cache.enabled }); }
   function saveToolbarPos()  { safeSet({ 'wh::toolbarPos': cache.toolbarPos }); }
+  function saveLang()        { safeSet({ 'wh::lang': cache.lang }); }
 
   // ---------- 撤销栈 ----------
   const undoStack = [];
@@ -74,17 +103,18 @@
     toolbar = document.createElement('div');
     toolbar.id = 'wh-toolbar';
     toolbar.innerHTML = `
-      <div id="wh-drag" title="拖动">⋮⋮</div>
+      <div id="wh-drag" title="${t('drag')}">⋮⋮</div>
       ${COLORS.map(c => `<div class="wh-swatch" data-color="${c}" style="background:${c}"></div>`).join('')}
       <div class="wh-sep"></div>
-      ${STYLES.map(s => `<button class="wh-style" data-style="${s.key}" title="${s.title}"><span style="${s.preview(cache.lastColor)}">${s.label}</span></button>`).join('')}
+      ${STYLES.map(s => `<button class="wh-style" data-style="${s.key}" title="${t('style_' + s.key)}"><span style="${s.preview(cache.lastColor)}">${s.label}</span></button>`).join('')}
       <div class="wh-sep"></div>
       <button id="wh-toggle"></button>
-      <button id="wh-undo" title="撤销 (⌘/Ctrl+Shift+Z)">↶</button>
-      <button id="wh-list" title="高亮列表">☰</button>
-      <button id="wh-clear">清除</button>
-      <button id="wh-export">导出</button>
-      <button id="wh-hide">×</button>
+      <button id="wh-undo" title="${t('undo')}">↶</button>
+      <button id="wh-list" title="${t('list')}">☰</button>
+      <button id="wh-clear">${t('clear')}</button>
+      <button id="wh-export">${t('export')}</button>
+      <button id="wh-lang" title="EN / 中">${t('langToggle')}</button>
+      <button id="wh-hide" title="${t('hide')}">×</button>
     `;
     document.body.appendChild(toolbar);
 
@@ -102,16 +132,16 @@
     popup.innerHTML = `
       <div style="display:flex;gap:4px;align-items:center;">
         ${COLORS.map(c => `<div class="wh-swatch" data-color="${c}" style="background:${c}"></div>`).join('')}
-        <button id="wh-popup-del">删除</button>
+        <button id="wh-popup-del">${t('popup_del')}</button>
       </div>
       <div style="display:flex;gap:4px;align-items:center;margin-top:4px;">
-        ${STYLES.map(s => `<button class="wh-style" data-style="${s.key}" title="${s.title}"><span style="${s.preview('#fff')}color:#fff;">${s.label}</span></button>`).join('')}
+        ${STYLES.map(s => `<button class="wh-style" data-style="${s.key}" title="${t('style_' + s.key)}"><span style="${s.preview('#fff')}color:#fff;">${s.label}</span></button>`).join('')}
       </div>
       <div class="wh-note-row">
-        <textarea id="wh-popup-note" placeholder="加一条笔记…"></textarea>
+        <textarea id="wh-popup-note" placeholder="${t('popup_note_ph')}"></textarea>
       </div>
       <div style="display:flex;justify-content:flex-end;margin-top:4px;">
-        <button id="wh-popup-save">保存笔记</button>
+        <button id="wh-popup-save">${t('popup_save')}</button>
       </div>
     `;
     document.body.appendChild(popup);
@@ -120,8 +150,8 @@
     sidebar.id = 'wh-sidebar';
     sidebar.innerHTML = `
       <div id="wh-sidebar-header">
-        <span>高亮列表 (<span id="wh-sidebar-count">0</span>)</span>
-        <button id="wh-sidebar-close" title="关闭">×</button>
+        <span>${t('sidebar_title')} (<span id="wh-sidebar-count">0</span>)</span>
+        <button id="wh-sidebar-close" title="${t('sidebar_close')}">×</button>
       </div>
       <div id="wh-sidebar-list"></div>
     `;
@@ -146,7 +176,7 @@
       if (span && s) span.setAttribute('style', s.preview(cache.lastColor));
     });
     const btn = toolbar.querySelector('#wh-toggle');
-    btn.textContent = cache.enabled ? '已开启' : '已关闭';
+    btn.textContent = cache.enabled ? t('enabled') : t('disabled');
     btn.style.background = cache.enabled ? '#d4edda' : '#f8d7da';
   }
 
@@ -179,6 +209,41 @@
     }
   }
 
+  // 切换语言后：把所有可见文案 / title / placeholder 重新刷一遍（保留位置和事件监听）
+  function relocalize() {
+    if (toolbar) {
+      toolbar.querySelector('#wh-drag').title = t('drag');
+      toolbar.querySelector('#wh-undo').title = t('undo');
+      toolbar.querySelector('#wh-list').title = t('list');
+      toolbar.querySelector('#wh-clear').textContent = t('clear');
+      toolbar.querySelector('#wh-export').textContent = t('export');
+      toolbar.querySelector('#wh-lang').textContent = t('langToggle');
+      toolbar.querySelector('#wh-hide').title = t('hide');
+      toolbar.querySelectorAll('.wh-style').forEach(b => {
+        b.title = t('style_' + b.dataset.style);
+      });
+      refreshToolbar(); // 更新 enabled/disabled 文字
+    }
+    if (popup) {
+      const del = popup.querySelector('#wh-popup-del');
+      const save = popup.querySelector('#wh-popup-save');
+      const note = popup.querySelector('#wh-popup-note');
+      if (del) del.textContent = t('popup_del');
+      if (save) save.textContent = t('popup_save');
+      if (note) note.placeholder = t('popup_note_ph');
+      popup.querySelectorAll('.wh-style').forEach(b => {
+        b.title = t('style_' + b.dataset.style);
+      });
+    }
+    if (sidebar) {
+      const head = sidebar.querySelector('#wh-sidebar-header span');
+      if (head) head.innerHTML = `${t('sidebar_title')} (<span id="wh-sidebar-count">${cache.pageMarks.length}</span>)`;
+      const close = sidebar.querySelector('#wh-sidebar-close');
+      if (close) close.title = t('sidebar_close');
+      renderSidebar();
+    }
+  }
+
   function setupToolbarHandlers() {
     toolbar.addEventListener('mousedown', e => {
       if (e.target.id === 'wh-drag') return; // 拖动单独处理
@@ -207,8 +272,12 @@
       } else if (e.target.id === 'wh-list') {
         sidebar.classList.toggle('open');
         if (sidebar.classList.contains('open')) renderSidebar();
+      } else if (e.target.id === 'wh-lang') {
+        cache.lang = (cache.lang === 'zh') ? 'en' : 'zh';
+        relocalize();
+        setTimeout(saveLang, 0);
       } else if (e.target.id === 'wh-clear') {
-        if (confirm('清除本页全部高亮？')) {
+        if (confirm(t('confirm_clear'))) {
           pushUndo({ type: 'clear', marks: cache.pageMarks.slice() });
           cache.pageMarks = [];
           saveMarks();
@@ -392,7 +461,7 @@
         <div class="wh-item-text">${escapeHtml(m.text)}</div>
         ${m.note ? `<div class="wh-item-note">${escapeHtml(m.note)}</div>` : ''}
       </div>
-    `).join('') || '<div style="color:#999;padding:12px;text-align:center;">还没有高亮</div>';
+    `).join('') || `<div style="color:#999;padding:12px;text-align:center;">${t('sidebar_empty')}</div>`;
   }
 
   function escapeHtml(s) {
