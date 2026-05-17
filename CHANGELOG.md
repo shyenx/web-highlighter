@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-05-17
+
+### Fixed
+- Click-vs-select on existing highlight: the editor popup no longer pops up while you're trying to drag-select text inside a marked region (uses click intent + selection check)
+- Empty/whitespace-only selections no longer create zombie marks
+- `findTextRange` guards against empty text (prevents potential infinite loop)
+- Second restore pass only runs when the first pass left unresolved marks (saves wasted DOM walks)
+- Cleared stale `text-decoration-thickness` / `text-underline-offset` when switching styles
+- Storage writes are now wrapped in try/catch with a `console.warn` on failure (no more silent quota errors)
+
+### Changed
+- Dropped unused `scripting` permission from manifest (smaller install-warning footprint)
+
+### Added
+- Press `Esc` to close the inline popup
+- When opening the popup on a mark with no existing note, the note textarea auto-focuses
+
 ## [0.2.0] - 2026-05-17
 
 ### Added

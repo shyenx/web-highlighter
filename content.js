@@ -33,11 +33,22 @@
       });
     });
   }
-  function saveMarks() { chrome.storage.local.set({ [PAGE_KEY]: cache.pageMarks }); }
-  function saveLastColor() { chrome.storage.local.set({ 'wh::lastColor': cache.lastColor }); }
-  function saveLastStyle() { chrome.storage.local.set({ 'wh::lastStyle': cache.lastStyle }); }
-  function saveEnabled() { chrome.storage.local.set({ 'wh::enabled': cache.enabled }); }
-  function saveToolbarPos() { chrome.storage.local.set({ 'wh::toolbarPos': cache.toolbarPos }); }
+  function safeSet(obj) {
+    try {
+      chrome.storage.local.set(obj, () => {
+        if (chrome.runtime.lastError) {
+          console.warn('[web-highlighter] storage.set failed:', chrome.runtime.lastError.message);
+        }
+      });
+    } catch (err) {
+      console.warn('[web-highlighter] storage.set threw:', err);
+    }
+  }
+  function saveMarks()       { safeSet({ [PAGE_KEY]: cache.pageMarks }); }
+  function saveLastColor()   { safeSet({ 'wh::lastColor': cache.lastColor }); }
+  function saveLastStyle()   { safeSet({ 'wh::lastStyle': cache.lastStyle }); }
+  function saveEnabled()     { safeSet({ 'wh::enabled': cache.enabled }); }
+  function saveToolbarPos()  { safeSet({ 'wh::toolbarPos': cache.toolbarPos }); }
 
   // ---------- 撤销栈 ----------
   const undoStack = [];
@@ -136,6 +147,8 @@
     el.style.background = '';
     el.style.textDecoration = '';
     el.style.textDecorationColor = '';
+    el.style.textDecorationThickness = '';
+    el.style.textUnderlineOffset = '';
     if (style === 'bg') {
       el.style.backgroundColor = color;
     } else if (style === 'underline') {
@@ -279,28 +292,49 @@
       });
     }
 
+    // 关闭 popup：mousedown 在 popup/工具栏/侧栏/任意 mark 之外时
     document.addEventListener('mousedown', e => {
-      if (e.target.closest('#wh-popup') || e.target.closest('#wh-toolbar') || e.target.closest('#wh-sidebar')) return;
+      if (e.target.closest('#wh-popup') || e.target.closest('#wh-toolbar') || e.target.closest('#wh-sidebar') || e.target.closest('.wh-mark')) return;
+      popup.style.display = 'none';
+      activeMarkId = null;
+    });
+
+    // 打开 popup：用 click（mousedown→mouseup 同位置），且仅当没有正在选中的文字
+    let downOn = null;
+    document.addEventListener('mousedown', e => {
       const m = e.target.closest('.wh-mark');
-      if (m) {
-        activeMarkId = m.dataset.whId;
-        const r = m.getBoundingClientRect();
-        popup.style.display = 'flex';
-        popup.style.top = (window.scrollY + r.bottom + 6) + 'px';
-        popup.style.left = (window.scrollX + r.left) + 'px';
-        const mark = cache.pageMarks.find(x => x.id === activeMarkId);
-        const markColor = mark?.color || cache.lastColor;
-        const markStyle = mark?.style || 'bg';
-        popup.querySelectorAll('.wh-swatch').forEach(s => {
-          s.classList.toggle('active', s.dataset.color === markColor);
-        });
-        popup.querySelectorAll('.wh-style').forEach(b => b.classList.toggle('active', b.dataset.style === markStyle));
-        syncPopupStylePreview(markColor);
-        popup.querySelector('#wh-popup-note').value = mark?.note || '';
-      } else {
-        popup.style.display = 'none';
-        activeMarkId = null;
-      }
+      downOn = m ? { mark: m, x: e.clientX, y: e.clientY } : null;
+    }, true);
+    document.addEventListener('mouseup', e => {
+      const start = downOn; downOn = null;
+      if (!start) return;
+      if (e.target.closest('#wh-popup') || e.target.closest('#wh-toolbar') || e.target.closest('#wh-sidebar')) return;
+      // 拖动判定：移动超过 4px 视为框选，不弹
+      if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) return;
+      // 有非空选区也不弹（用户在标注内做选词）
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed && sel.toString().trim()) return;
+      // 必须 up 在同一个 mark 元素上
+      const m = e.target.closest('.wh-mark');
+      if (!m || m.dataset.whId !== start.mark.dataset.whId) return;
+
+      activeMarkId = m.dataset.whId;
+      const r = m.getBoundingClientRect();
+      popup.style.display = 'flex';
+      popup.style.top = (window.scrollY + r.bottom + 6) + 'px';
+      popup.style.left = (window.scrollX + r.left) + 'px';
+      const mark = cache.pageMarks.find(x => x.id === activeMarkId);
+      const markColor = mark?.color || cache.lastColor;
+      const markStyle = mark?.style || 'bg';
+      popup.querySelectorAll('.wh-swatch').forEach(s => {
+        s.classList.toggle('active', s.dataset.color === markColor);
+      });
+      popup.querySelectorAll('.wh-style').forEach(b => b.classList.toggle('active', b.dataset.style === markStyle));
+      syncPopupStylePreview(markColor);
+      const noteEl = popup.querySelector('#wh-popup-note');
+      noteEl.value = mark?.note || '';
+      // 没有笔记时自动聚焦，方便直接写
+      if (!mark?.note) setTimeout(() => noteEl.focus(), 0);
     });
   }
 
@@ -390,9 +424,11 @@
 
   // ---------- 高亮核心 ----------
   function applyHighlight(range, color, style) {
+    if (!range || range.collapsed) return;
+    const text = range.toString();
+    if (!text.trim()) return;
     const id = 'h_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
     wrapRange(range, color, id, '', style);
-    const text = range.toString();
     cache.pageMarks.push({ id, color, style, text, ctx: contextOf(text), note: '' });
     saveMarks();
     pushUndo({ type: 'add', id });
@@ -512,6 +548,12 @@
 
   document.addEventListener('keydown', e => {
     const mod = e.metaKey || e.ctrlKey;
+    // Esc 关闭 popup
+    if (e.key === 'Escape' && popup && popup.style.display !== 'none') {
+      popup.style.display = 'none';
+      activeMarkId = null;
+      return;
+    }
     // ⌘+Enter 在笔记框里 = 保存
     if (e.target && e.target.id === 'wh-popup-note' && mod && e.key === 'Enter') {
       e.preventDefault();
@@ -531,6 +573,7 @@
 
   // ---------- 还原 ----------
   function findTextRange(text, ctx) {
+    if (!text) return null;
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     const nodes = [];
     let n;
@@ -570,12 +613,15 @@
   }
 
   function restore() {
+    let pending = 0;
     cache.pageMarks.forEach(m => {
       if (document.querySelector(`.wh-mark[data-wh-id="${m.id}"]`)) return;
       const r = findTextRange(m.text, m.ctx);
       if (r) wrapRange(r, m.color, m.id, m.note, m.style);
+      else pending++;
     });
     renderSidebar();
+    return pending;
   }
 
   // ---------- 来自 background 的消息 ----------
@@ -591,7 +637,9 @@
   // ---------- 启动 ----------
   loadAll().then(() => {
     buildUI();
-    setTimeout(restore, 300);
-    setTimeout(restore, 1500);
+    setTimeout(() => {
+      const pending = restore();
+      if (pending > 0) setTimeout(restore, 1500);
+    }, 300);
   });
 })();
