@@ -205,26 +205,34 @@
     if (wh.stylePop) wh.stylePop.style.display = 'none';
   }
 
+  // Hover-based open/close with a small delay so the mouse can bridge the
+  // gap between the trigger button and the popover.
+  let hoverCloseTimer = 0;
+  function openPopHover(pop, anchor) {
+    clearTimeout(hoverCloseTimer);
+    // If another picker pop is open, close it immediately.
+    if (pop === wh.colorPop && wh.stylePop) wh.stylePop.style.display = 'none';
+    if (pop === wh.stylePop && wh.colorPop) wh.colorPop.style.display = 'none';
+    positionPopAbove(pop, anchor);
+  }
+  function schedulePopClose() {
+    clearTimeout(hoverCloseTimer);
+    hoverCloseTimer = setTimeout(closeAllPickerPops, 200);
+  }
+  function cancelPopClose() {
+    clearTimeout(hoverCloseTimer);
+  }
+
   function setupToolbarHandlers() {
     wh.toolbar.addEventListener('mousedown', e => {
       if (e.target.id === 'wh-drag') return; // 拖动单独处理
       e.stopPropagation();
       e.preventDefault();
 
-      // Picker buttons open / close popovers.
-      const pickerBtn = e.target.closest('#wh-color-picker, #wh-style-picker');
-      if (pickerBtn) {
-        const isColor = pickerBtn.id === 'wh-color-picker';
-        const pop = isColor ? wh.colorPop : wh.stylePop;
-        const other = isColor ? wh.stylePop : wh.colorPop;
-        if (other) other.style.display = 'none';
-        if (pop.style.display === 'flex') {
-          pop.style.display = 'none';
-        } else {
-          positionPopAbove(pop, pickerBtn);
-        }
-        return;
-      }
+      // Picker button clicks are no-ops (hover handles open/close). The
+      // closest('.wh-picker') guard keeps the mousedown from falling through
+      // to the toggle / undo branches below if the user does click a picker.
+      if (e.target.closest('.wh-picker')) return;
 
       if (e.target.id === 'wh-toggle') {
         wh.cache.enabled = !wh.cache.enabled;
@@ -283,11 +291,20 @@
       closeAllPickerPops();
     });
 
-    // Click anywhere outside the picker popovers closes them.
-    document.addEventListener('mousedown', e => {
-      if (e.target.closest('#wh-color-pop') || e.target.closest('#wh-style-pop')) return;
-      if (e.target.closest('#wh-color-picker') || e.target.closest('#wh-style-picker')) return;
-      closeAllPickerPops();
+    // Hover-driven open / close for the two picker popovers.
+    const colorBtn = wh.toolbar.querySelector('#wh-color-picker');
+    const styleBtn = wh.toolbar.querySelector('#wh-style-picker');
+    if (colorBtn) {
+      colorBtn.addEventListener('mouseenter', () => openPopHover(wh.colorPop, colorBtn));
+      colorBtn.addEventListener('mouseleave', schedulePopClose);
+    }
+    if (styleBtn) {
+      styleBtn.addEventListener('mouseenter', () => openPopHover(wh.stylePop, styleBtn));
+      styleBtn.addEventListener('mouseleave', schedulePopClose);
+    }
+    [wh.colorPop, wh.stylePop].forEach(pop => {
+      pop.addEventListener('mouseenter', cancelPopClose);
+      pop.addEventListener('mouseleave', schedulePopClose);
     });
 
     // Scroll / resize → close popovers (their absolute position would be stale).

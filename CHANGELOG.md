@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-05-17
+
+### Changed
+- **Picker popovers now open on hover** instead of requiring a click —
+  mouse over the color or style button → popover appears; move away →
+  it closes after 200 ms. The delay lets the cursor bridge the gap
+  between button and popover without dismissing.
+- Clicking still works for selection inside the popover (click a swatch
+  or style to apply); the picker buttons themselves are no longer
+  click-toggles.
+
 ## [0.6.1] - 2026-05-17
 
 ### Changed
