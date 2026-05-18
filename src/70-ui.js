@@ -36,19 +36,7 @@
     `;
     document.body.appendChild(wh.toolbar);
 
-    if (cache.toolbarPos) {
-      // Pre-paint clamp using estimated dimensions; re-clamp with measured size
-      // on next frame via ensureUIAttached().
-      const w = Math.max(0, window.innerWidth - 280);
-      const h = Math.max(0, window.innerHeight - 40);
-      const left = Math.max(0, Math.min(w, cache.toolbarPos.left));
-      const top  = Math.max(0, Math.min(h, cache.toolbarPos.top));
-      wh.toolbar.style.left = left + 'px';
-      wh.toolbar.style.top  = top  + 'px';
-      wh.toolbar.style.right = 'auto';
-      wh.toolbar.style.bottom = 'auto';
-      requestAnimationFrame(() => wh.ensureUIAttached());
-    }
+    applyToolbarPos();
 
     wh.popup = document.createElement('div');
     wh.popup.id = 'wh-popup';
@@ -107,6 +95,39 @@
     setupSidebarHandlers();
     wh.refreshTheme();
   };
+
+  // Apply the saved position (or the default of right-edge, vertically
+  // centered) to the toolbar. Position is stored as {anchor, x, y} where
+  // anchor is 'right' (x = distance from viewport right edge) or 'left'
+  // (x = distance from viewport left edge). Legacy {left, top} also
+  // accepted from older releases.
+  function applyToolbarPos() {
+    const p = wh.cache.toolbarPos;
+    wh.toolbar.style.transform = '';
+    if (!p) {
+      // Default: stuck to the right edge, vertically centered.
+      wh.toolbar.style.right = '0';
+      wh.toolbar.style.left  = 'auto';
+      wh.toolbar.style.top   = '50%';
+      wh.toolbar.style.bottom = 'auto';
+      wh.toolbar.style.transform = 'translateY(-50%)';
+      return;
+    }
+    if (p.anchor === 'right') {
+      wh.toolbar.style.right = p.x + 'px';
+      wh.toolbar.style.left  = 'auto';
+    } else if (p.anchor === 'left') {
+      wh.toolbar.style.left  = p.x + 'px';
+      wh.toolbar.style.right = 'auto';
+    } else {
+      // Legacy format: { left, top }
+      wh.toolbar.style.left  = (p.left || 0) + 'px';
+      wh.toolbar.style.right = 'auto';
+    }
+    wh.toolbar.style.top    = ((p.y != null) ? p.y : (p.top || 0)) + 'px';
+    wh.toolbar.style.bottom = 'auto';
+    requestAnimationFrame(() => wh.ensureUIAttached());
+  }
 
   wh.refreshToolbar = function refreshToolbar() {
     const { t, STYLES, cache, toolbar, colorPop, stylePop } = wh;
@@ -368,10 +389,13 @@
         e.stopPropagation();
         const r = wh.toolbar.getBoundingClientRect();
         sx = e.clientX; sy = e.clientY; sl = r.left; st = r.top;
+        // Drag uses absolute left/top throughout; clear any default
+        // right anchor and translateY centering.
         wh.toolbar.style.left = sl + 'px';
         wh.toolbar.style.top  = st + 'px';
         wh.toolbar.style.right = 'auto';
         wh.toolbar.style.bottom = 'auto';
+        wh.toolbar.style.transform = '';
         dragging = true;
       });
     });
@@ -385,10 +409,24 @@
     document.addEventListener('mouseup', () => {
       if (!dragging) return;
       dragging = false;
-      wh.cache.toolbarPos = {
-        left: parseInt(wh.toolbar.style.left, 10),
-        top:  parseInt(wh.toolbar.style.top,  10),
-      };
+      // Pick anchor based on which half of the viewport the toolbar landed in,
+      // so it always expands toward the center (away from the nearest edge).
+      const r = wh.toolbar.getBoundingClientRect();
+      const midX = r.left + r.width / 2;
+      const y = Math.max(0, r.top);
+      if (midX > window.innerWidth / 2) {
+        const rightOffset = Math.max(0, window.innerWidth - r.right);
+        wh.toolbar.style.right = rightOffset + 'px';
+        wh.toolbar.style.left  = 'auto';
+        wh.cache.toolbarPos = { anchor: 'right', x: rightOffset, y };
+      } else {
+        const leftOffset = Math.max(0, r.left);
+        wh.toolbar.style.left  = leftOffset + 'px';
+        wh.toolbar.style.right = 'auto';
+        wh.cache.toolbarPos = { anchor: 'left',  x: leftOffset,  y };
+      }
+      wh.toolbar.style.top = y + 'px';
+      wh.toolbar.style.bottom = 'auto';
       wh.saveToolbarPos();
     });
   }
@@ -537,22 +575,38 @@
   };
 
   // Re-attach UI elements if a SPA host removed them; clamp toolbar to viewport.
+  // Handles both left-anchored (style.left set) and right-anchored
+  // (style.right set) toolbars.
   wh.ensureUIAttached = function ensureUIAttached() {
     const { toolbar, popup, sidebar } = wh;
     if (toolbar && !document.body.contains(toolbar)) document.body.appendChild(toolbar);
     if (popup   && !document.body.contains(popup))   document.body.appendChild(popup);
     if (sidebar && !document.body.contains(sidebar)) document.body.appendChild(sidebar);
-    if (toolbar && toolbar.style.left && toolbar.style.top) {
-      const x = parseFloat(toolbar.style.left) || 0;
-      const y = parseFloat(toolbar.style.top)  || 0;
-      const maxX = Math.max(0, window.innerWidth  - toolbar.offsetWidth);
-      const maxY = Math.max(0, window.innerHeight - toolbar.offsetHeight);
-      const nx = Math.max(0, Math.min(maxX, x));
+    if (!toolbar) return;
+
+    const h = toolbar.offsetHeight || 36;
+    const maxY = Math.max(0, window.innerHeight - h);
+
+    // Vertical clamp (skip percentage-based defaults like top: 50%).
+    if (toolbar.style.top && toolbar.style.top.endsWith('px')) {
+      const y = parseFloat(toolbar.style.top) || 0;
       const ny = Math.max(0, Math.min(maxY, y));
-      if (nx !== x || ny !== y) {
-        toolbar.style.left = nx + 'px';
-        toolbar.style.top  = ny + 'px';
-      }
+      if (ny !== y) toolbar.style.top = ny + 'px';
+    }
+
+    // Horizontal clamp:
+    if (toolbar.style.left && toolbar.style.left.endsWith('px')) {
+      const w = toolbar.offsetWidth || 100;
+      const maxX = Math.max(0, window.innerWidth - w);
+      const x = parseFloat(toolbar.style.left) || 0;
+      const nx = Math.max(0, Math.min(maxX, x));
+      if (nx !== x) toolbar.style.left = nx + 'px';
+    } else if (toolbar.style.right && toolbar.style.right.endsWith('px')) {
+      const w = toolbar.offsetWidth || 100;
+      const maxR = Math.max(0, window.innerWidth - w);
+      const x = parseFloat(toolbar.style.right) || 0;
+      const nx = Math.max(0, Math.min(maxR, x));
+      if (nx !== x) toolbar.style.right = nx + 'px';
     }
   };
 })();

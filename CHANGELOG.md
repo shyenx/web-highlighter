@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.6] - 2026-05-17
+
+### Changed
+- **Toolbar defaults to the right edge of the viewport, vertically
+  centered** (previously bottom-right with margin). Combined with the
+  collapsed-icon mode from v0.6.5, the toolbar now lives as a small
+  tab pinned to the right edge.
+- **Smart expansion direction**: anchored by whichever side of the
+  viewport the toolbar is closer to. Stuck to the right → expands
+  leftward; dragged to the left half → expands rightward. Always grows
+  toward viewport center, never off-screen.
+- Drag-end stores the new anchor side along with the offset, so the
+  position survives reloads and window resizes correctly. Old `{left,
+  top}` storage format from previous releases is still accepted.
+
 ## [0.6.5] - 2026-05-17
 
 ### Added
