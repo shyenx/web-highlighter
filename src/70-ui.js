@@ -11,7 +11,11 @@
 
     wh.toolbar = document.createElement('div');
     wh.toolbar.id = 'wh-toolbar';
+    wh.toolbar.classList.add('wh-collapsed'); // 默认折叠成小图标，hover 展开
     wh.toolbar.innerHTML = `
+      <div id="wh-collapsed-icon" title="Web Highlighter">
+        <span id="wh-collapsed-dot" style="background:${cache.lastColor}"></span>
+      </div>
       <div id="wh-drag" title="${t('drag')}">⋮⋮</div>
       <button id="wh-color-picker" class="wh-picker" title="${t('style_bg')}">
         <span id="wh-color-dot" class="wh-color-dot" style="background:${cache.lastColor}"></span>
@@ -139,6 +143,10 @@
     const btn = toolbar.querySelector('#wh-toggle');
     btn.textContent = cache.enabled ? t('enabled') : t('disabled');
     btn.style.background = cache.enabled ? '#d4edda' : '#f8d7da';
+
+    // Collapsed-state dot mirrors the current default color.
+    const collapsedDot = toolbar.querySelector('#wh-collapsed-dot');
+    if (collapsedDot) collapsedDot.style.background = cache.lastColor;
   };
 
   // Refresh all visible strings / titles / placeholders in place. Used when the
@@ -226,6 +234,7 @@
   function setupToolbarHandlers() {
     wh.toolbar.addEventListener('mousedown', e => {
       if (e.target.id === 'wh-drag') return; // 拖动单独处理
+      if (e.target.closest('#wh-collapsed-icon')) return; // 折叠图标也是拖动入口
       e.stopPropagation();
       e.preventDefault();
 
@@ -319,21 +328,52 @@
     // Scroll / resize → close popovers (their absolute position would be stale).
     window.addEventListener('scroll', closeAllPickerPops, true);
     window.addEventListener('resize', closeAllPickerPops);
+
+    // ---------- Collapse to icon / expand on hover ----------
+    // The toolbar is collapsed by default. Hovering over it (or over an open
+    // picker popover) keeps it expanded. After ~400ms with no hover anywhere
+    // on toolbar + popovers, it collapses back. Drag still works on the icon.
+    const hoverState = { toolbar: false, colorPop: false, stylePop: false };
+    let collapseTimer = 0;
+    function reevaluateCollapse() {
+      clearTimeout(collapseTimer);
+      const anyHovered = hoverState.toolbar || hoverState.colorPop || hoverState.stylePop;
+      if (anyHovered) {
+        wh.toolbar.classList.remove('wh-collapsed');
+      } else {
+        collapseTimer = setTimeout(() => {
+          wh.toolbar.classList.add('wh-collapsed');
+          closeAllPickerPops();
+        }, 400);
+      }
+    }
+    wh.toolbar.addEventListener('mouseenter', () => { hoverState.toolbar = true;  reevaluateCollapse(); });
+    wh.toolbar.addEventListener('mouseleave', () => { hoverState.toolbar = false; reevaluateCollapse(); });
+    wh.colorPop.addEventListener('mouseenter', () => { hoverState.colorPop = true;  reevaluateCollapse(); });
+    wh.colorPop.addEventListener('mouseleave', () => { hoverState.colorPop = false; reevaluateCollapse(); });
+    wh.stylePop.addEventListener('mouseenter', () => { hoverState.stylePop = true;  reevaluateCollapse(); });
+    wh.stylePop.addEventListener('mouseleave', () => { hoverState.stylePop = false; reevaluateCollapse(); });
   }
 
   function setupDrag() {
-    const handle = wh.toolbar.querySelector('#wh-drag');
+    // Both the expanded drag handle and the collapsed icon initiate drag.
+    const handles = [
+      wh.toolbar.querySelector('#wh-drag'),
+      wh.toolbar.querySelector('#wh-collapsed-icon'),
+    ].filter(Boolean);
     let sx, sy, sl, st, dragging = false;
-    handle.addEventListener('mousedown', e => {
-      e.preventDefault();
-      e.stopPropagation();
-      const r = wh.toolbar.getBoundingClientRect();
-      sx = e.clientX; sy = e.clientY; sl = r.left; st = r.top;
-      wh.toolbar.style.left = sl + 'px';
-      wh.toolbar.style.top  = st + 'px';
-      wh.toolbar.style.right = 'auto';
-      wh.toolbar.style.bottom = 'auto';
-      dragging = true;
+    handles.forEach(handle => {
+      handle.addEventListener('mousedown', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        const r = wh.toolbar.getBoundingClientRect();
+        sx = e.clientX; sy = e.clientY; sl = r.left; st = r.top;
+        wh.toolbar.style.left = sl + 'px';
+        wh.toolbar.style.top  = st + 'px';
+        wh.toolbar.style.right = 'auto';
+        wh.toolbar.style.bottom = 'auto';
+        dragging = true;
+      });
     });
     document.addEventListener('mousemove', e => {
       if (!dragging) return;

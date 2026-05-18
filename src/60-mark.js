@@ -11,7 +11,6 @@
     const text = range.toString();
     if (!text.trim()) return;
     const id = 'h_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-    console.log('[wh] applyHighlight id=' + id + ' color=' + color + ' style=' + style + ' text=' + text.slice(0, 30) + ' key=' + wh.currentKey);
     wh.wrapRange(range, color, id, '', style);
     wh.cache.pageMarks.push({ id, color, style, text, ctx: wh.contextOf(text), note: '' });
     wh.saveMarks();
@@ -96,14 +95,12 @@
   // Returns count of marks that couldn't be located (caller may schedule a retry).
   wh.restore = function restore() {
     let pending = 0;
-    let restored = 0;
     wh.cache.pageMarks.forEach(m => {
       if (document.querySelector(`.wh-mark[data-wh-id="${m.id}"]`)) return;
       const r = wh.findTextRange(m.text, m.ctx);
-      if (r) { wh.wrapRange(r, m.color, m.id, m.note, m.style); restored++; }
+      if (r) wh.wrapRange(r, m.color, m.id, m.note, m.style);
       else pending++;
     });
-    console.log('[wh] restore: cacheSize=' + wh.cache.pageMarks.length + ' restored=' + restored + ' pending=' + pending + ' key=' + wh.currentKey);
     wh.renderSidebar();
     return pending;
   };

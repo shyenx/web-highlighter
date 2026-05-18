@@ -15,13 +15,11 @@
     try {
       chrome.storage.local.set(obj, () => {
         if (chrome.runtime.lastError) {
-          console.warn('[wh] storage.set FAILED:', chrome.runtime.lastError.message, 'payload keys:', Object.keys(obj));
-        } else {
-          console.log('[wh] storage.set OK. keys=' + Object.keys(obj).join(','));
+          console.warn('[web-highlighter] storage.set failed:', chrome.runtime.lastError.message);
         }
       });
     } catch (err) {
-      console.warn('[wh] storage.set threw:', err, 'payload keys:', Object.keys(obj));
+      console.warn('[web-highlighter] storage.set threw:', err);
     }
   };
 
@@ -29,7 +27,6 @@
   wh.loadAll = function loadAll() {
     return new Promise((resolve) => {
       const keys = [wh.currentKey, 'wh::lastColor', 'wh::lastStyle', 'wh::enabled', 'wh::toolbarPos', 'wh::lang'];
-      console.log('[wh] loadAll start, requesting keys:', keys);
       chrome.storage.local.get(keys, (res) => {
         wh.cache.pageMarks  = res[wh.currentKey] || [];
         wh.cache.lastColor  = res['wh::lastColor']  || wh.COLORS[0];
@@ -37,7 +34,6 @@
         wh.cache.enabled    = res['wh::enabled']    !== false;
         wh.cache.toolbarPos = res['wh::toolbarPos'] || null;
         wh.cache.lang       = res['wh::lang']       || wh.detectLang();
-        console.log('[wh] loadAll done. currentKey=' + wh.currentKey + ' pageMarks=' + wh.cache.pageMarks.length, 'rawResult:', res);
         resolve();
       });
     });
@@ -53,10 +49,7 @@
 
   // saveMarks always writes to currentKey at call time, so it's safe to call
   // immediately after currentKey is updated on URL change.
-  wh.saveMarks      = function () {
-    console.log('[wh] saveMarks: writing ' + wh.cache.pageMarks.length + ' marks to key=' + wh.currentKey);
-    wh.safeSet({ [wh.currentKey]: wh.cache.pageMarks });
-  };
+  wh.saveMarks      = function () { wh.safeSet({ [wh.currentKey]: wh.cache.pageMarks }); };
   wh.saveLastColor  = function () { wh.safeSet({ 'wh::lastColor':  wh.cache.lastColor  }); };
   wh.saveLastStyle  = function () { wh.safeSet({ 'wh::lastStyle':  wh.cache.lastStyle  }); };
   wh.saveEnabled    = function () { wh.safeSet({ 'wh::enabled':    wh.cache.enabled    }); };

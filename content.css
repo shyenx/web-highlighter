@@ -21,6 +21,33 @@
 #wh-toolbar > * { flex-shrink: 0; }
 #wh-toolbar button { white-space: nowrap; }
 
+/* Collapsed-state icon (the small floating "puck" the toolbar shrinks to). */
+#wh-collapsed-icon {
+  display: none;
+  width: 28px; height: 28px;
+  align-items: center; justify-content: center;
+  cursor: grab; user-select: none;
+}
+#wh-collapsed-icon:active { cursor: grabbing; }
+#wh-collapsed-dot {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 1.5px solid rgba(0,0,0,.25); box-sizing: border-box;
+  box-shadow: 0 1px 2px rgba(0,0,0,.1) inset;
+  display: inline-block;
+}
+#wh-toolbar.wh-collapsed {
+  padding: 4px;
+  gap: 0;
+  border-radius: 50%;
+  /* Subtler shadow when collapsed. */
+  box-shadow: 0 2px 8px rgba(0,0,0,.18);
+}
+#wh-toolbar.wh-collapsed > :not(#wh-collapsed-icon) { display: none !important; }
+#wh-toolbar.wh-collapsed > #wh-collapsed-icon { display: inline-flex; }
+#wh-toolbar[data-wh-theme="dark"] #wh-collapsed-dot {
+  border-color: rgba(255,255,255,.3);
+}
+
 /* Picker buttons (compact color + style triggers in the toolbar) */
 #wh-toolbar .wh-picker {
   display: inline-flex; align-items: center; gap: 4px;

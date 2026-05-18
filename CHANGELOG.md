@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.5] - 2026-05-17
+
+### Added
+- **Toolbar collapses to a small floating icon by default**, expands
+  on hover. The icon is a small puck showing the current default color.
+  Hover the icon → toolbar slides open; move the mouse away → after
+  400ms the toolbar collapses again and any open picker popover closes.
+  Drag still works on the collapsed icon. This avoids the toolbar
+  blocking page content when not in use.
+
+### Removed
+- The verbose `[wh]` debug console logging added in v0.6.4 is removed
+  now that the diagnosis is complete (highlights "vanishing" on
+  anthropic.com is a `findTextRange` lookup-failure issue, not a save
+  / load issue — to be addressed separately).
+
 ## [0.6.4] - 2026-05-17 (debug build)
 
 ### Added (temporary)
